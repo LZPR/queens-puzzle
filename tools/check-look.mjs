@@ -165,6 +165,59 @@ ok('内容比一屏高，面板自己滚，「知道了」钉在面板下沿',
   ui.overflow && ui.done === 'sticky', `${ui.overflow}/${ui.done}`);
 await page.screenshot({ path: SHOTS + '20-look-sheet.png' });
 
+// ---------- 2.5 展柜上锁：每排第一套白送，其余全锁着 ----------
+console.log('\n--- 展柜上锁 ---');
+const locks = await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  // 徽章是烙在 markup 里的，解锁只把它藏掉：这里查的是「看得见」，不是「在不在」
+  const badgeOn = b => {
+    const l = b.querySelector('.sc-lock');
+    return !!l && l.offsetParent !== null;
+  };
+  const rows = k => [...document.querySelectorAll('#' + k + 'Row .showcase')].map(b => ({
+    id: b.dataset[k],
+    locked: b.classList.contains('is-locked'),
+    aria: b.getAttribute('aria-disabled'),
+    badge: badgeOn(b)
+  }));
+  // 点一套锁着的：设置不许动、html 钩子不许动、小字也不许改口
+  const before = d.settings.surfaceStyle;
+  document.querySelector('#surfaceRow .showcase[data-surface="plain"]').click();
+  return {
+    surface: rows('surface'), mark: rows('mark'), piece: rows('piece'), life: rows('life'),
+    before, after: d.settings.surfaceStyle,
+    attr: document.documentElement.getAttribute('data-surface'),
+    now: document.getElementById('surfaceNow').textContent
+  };
+});
+const flat = [...locks.surface, ...locks.mark, ...locks.piece, ...locks.life];
+ok('每排只有第一套开着，其余都锁着',
+  locks.surface.map(x => x.locked).join() === 'false,true,true,true,true' &&
+  locks.mark.map(x => x.locked).join() === 'false,true' &&
+  locks.piece.map(x => x.locked).join() === 'false,true' &&
+  locks.life.map(x => x.locked).join() === 'false,true',
+  JSON.stringify(locks));
+ok('锁着的展位都挂小锁，开着的不挂', flat.every(x => x.badge === x.locked));
+ok('aria-disabled 跟着锁走', flat.every(x => (x.aria === 'true') === x.locked));
+ok('点锁着的展位不动设置、不改钩子',
+  locks.before === locks.after && locks.after === 'geo' && locks.attr === 'geo' &&
+  /几何/.test(locks.now), `${locks.before}→${locks.after} ${locks.attr} ${locks.now}`);
+
+// 后面几节要真换样式，先把要用的那几套发下去（探针会顺带刷新展柜的锁）
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.lookUnlock('surface', 'plain');
+  d.lookUnlock('surface', 'sticker');
+  d.lookUnlock('mark', 'dot');
+  d.lookUnlock('piece', 'cat');
+});
+const freed = await page.evaluate(() => {
+  const b = document.querySelector('#surfaceRow .showcase[data-surface="plain"]');
+  const l = b.querySelector('.sc-lock');
+  return { locked: b.classList.contains('is-locked'), badge: !!l && l.offsetParent !== null };
+});
+ok('解锁后小锁当场摘掉', !freed.locked && !freed.badge, freed);
+
 // 面板开着时棋盘锁住
 const locked = await page.evaluate(() => {
   const d = __QUEENS_DEBUG__;
@@ -443,13 +496,16 @@ ok('三样都回默认后小黄点消失', back3.set === false && back3.attr ===
 await page.keyboard.press('Escape');
 await sleep(260);
 
-// 存档里塞脏值：读盘时退回默认，不把棋盘画空
+// 塞脏值：怪值与没解锁的（自然 / 血条）读盘时退回默认，解锁过的（小猫）留住。
+// 注意要改**内存里的 settings** 再同步落盘：直接改 localStorage 会被 boot 导航时
+// beforeunload 的 doSave 用内存值整个冲掉（这条测试以前就是那么空过的）。
 await page.evaluate(() => {
-  const s = JSON.parse(localStorage.getItem('queens.settings.v1') || '{}');
-  s.surfaceStyle = 'kaleidoscope';
+  const s = __QUEENS_DEBUG__.settings;
+  s.surfaceStyle = 'nature';
   s.markStyle = 'triangle';
-  s.pieceStyle = '';
-  localStorage.setItem('queens.settings.v1', JSON.stringify(s));
+  s.pieceStyle = 'cat';
+  s.lifeStyle = 'bar';
+  localStorage.setItem('queens.settings.v1', JSON.stringify(Object.assign({ sv: 2 }, s)));
 });
 await boot();
 const dirty = await page.evaluate(() => ({
@@ -458,9 +514,10 @@ const dirty = await page.evaluate(() => ({
   attrPiece: document.documentElement.getAttribute('data-piece'),
   attrSurface: document.documentElement.getAttribute('data-surface')
 }));
-ok('存档里的怪值退回默认',
-  dirty.look.surface === 'geo' && dirty.look.mark === 'x' && dirty.look.piece === 'queen' &&
-  dirty.attrSurface === 'geo' && dirty.attrMark === 'x' && dirty.attrPiece === 'queen',
+ok('怪值与没解锁的退回默认，解锁过的留住',
+  dirty.look.surface === 'geo' && dirty.look.mark === 'x' && dirty.look.piece === 'cat' &&
+  dirty.look.life === 'heart' &&
+  dirty.attrSurface === 'geo' && dirty.attrMark === 'x' && dirty.attrPiece === 'cat',
   JSON.stringify(dirty.look));
 
 // ---------- 贴纸的纱：全盘一个样 ----------

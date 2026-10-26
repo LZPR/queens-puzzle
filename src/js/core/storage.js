@@ -7,7 +7,7 @@ import { elapsedMs } from './clock.js';
 import { DEFAULT_SETTINGS, DIFF_ORDER, normalizeLives, normalizeLimit, normalizeSteps,
   SETTINGS_VERSION, SIZE_MAX, SIZE_MIN, STORE_GAME, STORE_SETTINGS } from './config.js';
 import { parseDaily, rulesFor } from './daily.js';
-import { styleId } from '../looks/index.js';
+import { unlockedStyle } from './unlock.js';
 import { settings, state } from './state.js';
 import { clamp } from './utils.js';
 
@@ -41,11 +41,12 @@ export function loadSettings() {
     settings.noHint = s.noHint === true;
     settings.noUndo = s.noUndo === true;
     settings.noSnap = s.noSnap === true;
-    // 外观：老存档没这几个字段、认不出来的 id（插件被删了）也退回默认，不至于把棋盘画空
-    settings.surfaceStyle = styleId('surface', s.surfaceStyle);
-    settings.markStyle = styleId('mark', s.markStyle);
-    settings.pieceStyle = styleId('piece', s.pieceStyle);
-    settings.lifeStyle = styleId('life', s.lifeStyle);
+    // 外观：老存档没这几个字段、认不出来的 id（插件被删了）也退回默认，不至于把棋盘画空；
+    // 没解锁的样式同样退回默认——那些得靠抽奖解锁（core/unlock.js），存档说了不算
+    settings.surfaceStyle = unlockedStyle('surface', s.surfaceStyle);
+    settings.markStyle = unlockedStyle('mark', s.markStyle);
+    settings.pieceStyle = unlockedStyle('piece', s.pieceStyle);
+    settings.lifeStyle = unlockedStyle('life', s.lifeStyle);
     /* 淡化：v2 起「淡化 ×」默认关闭。老存档没法区分「用户自己开过」和
      * 「旧默认开着」，所以干脆统一按新默认来——想淡回去面板里一拨就有。 */
     settings.fadeMark = ver >= SETTINGS_VERSION ? s.fadeMark === true : DEFAULT_SETTINGS.fadeMark;

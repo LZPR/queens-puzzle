@@ -469,9 +469,11 @@
   line-height: 1.3;
 }
 
-/* 谢谢参与：整条退成灰底 */
-.slot-prize[data-tone="lose"] .slot-prize-ico { background: var(--bg-neutral); color: var(--ink-faint); }
-.slot-prize[data-tone="lose"] .slot-prize-txt b { color: var(--ink-mute); }
+/* 谢谢参与：整条退成灰底（「全都解锁了」的 done 也是这一档情绪） */
+.slot-prize[data-tone="lose"] .slot-prize-ico,
+.slot-prize[data-tone="done"] .slot-prize-ico { background: var(--bg-neutral); color: var(--ink-faint); }
+.slot-prize[data-tone="lose"] .slot-prize-txt b,
+.slot-prize[data-tone="done"] .slot-prize-txt b { color: var(--ink-mute); }
 
 /* 转动中：图标位置放一撮点 */
 .slot-prize[data-tone="spinning"] .slot-prize-ico { background: var(--bg-neutral); }
@@ -523,14 +525,14 @@
   100% { transform: scale(1); }
 }
 
-/* 大奖：整条描金 */
-.slot-prize[data-tone="legend"] {
+/* 大奖（解锁了一套外观）：整条描金，图标转正一下 */
+.slot-prize[data-tone="prize"] {
   background: linear-gradient(180deg, #FFF3B0, #FFD93D);
   box-shadow: 0 4px 0 var(--ink), 0 0 0 3px rgba(255,217,61,.75), 0 0 26px rgba(255,217,61,.6);
   animation: slotPrizePop .5s var(--spring);
 }
 
-.slot-prize[data-tone="legend"] .slot-prize-ico {
+.slot-prize[data-tone="prize"] .slot-prize-ico {
   background: var(--ink);
   color: var(--accent);
   border-color: var(--ink);

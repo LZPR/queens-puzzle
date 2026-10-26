@@ -7,9 +7,11 @@
  * 规矩：
  *   · 第一次解开某一挡的每日挑战，结算界面出现「抽一次奖」；
  *   · 抽奖面板：机器摆好一盘（三转轮各三格）、拉杆能抽、空格也能抽；
- *   · 抽完立刻记账（queens.dailydraw.v1），收下回结算界面、按钮消失；
- *   · 重复游玩同一挡不再给抽；
- *   · ?luck=jackpot 钉死档位：传说档要点亮奖品条并放礼花；
+ *   · 奖品是外观（core/unlock.js 账本）：三个一样解锁那套；两个一样送一次再抽；
+ *     抽中已解锁的也送一次再抽；都解锁了转不出任何奖励；
+ *   · 送的那次不销资格：markDrawn 只在落定（谢谢参与 / 解锁 / 全解锁）时记，
+ *     中途收掉面板，回来结算界面的抽奖按钮还在；
+ *   · ?luck=unlock|repeat|pair|none 钉死第一抽的档位（只钉一抽）；
  *   · ?slot=easy|mid|hard|extreme 开机直接开面板（测试模式，抽了不记账）。
  * ========================================================================== */
 import { createRequire } from 'node:module';
@@ -76,23 +78,39 @@ async function winDaily(tier) {
 const sheet = () => page.evaluate(() => __QUEENS_DEBUG__.sheet());
 const probe = () => page.evaluate(() => __QUEENS_DEBUG__.slot());
 const drawn = () => page.evaluate(() => __QUEENS_DEBUG__.dailyDrawn());
+const unlocked = () => page.evaluate(() => __QUEENS_DEBUG__.lookUnlocked());
+const boot = async url => {
+  await page.goto(url || URL, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.waitForFunction('window.__QUEENS_DEBUG__ && __QUEENS_DEBUG__.state.regions.length > 0',
+    { timeout: 20000 });
+};
+/* 一直抽到落定（两个一样 / 已解锁会送再抽），最多十杆防呆 */
+async function pullUntilDone() {
+  for (let i = 0; i < 10; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => {
+      const s = __QUEENS_DEBUG__.slot();
+      return s.busy === false && s.tone !== 'idle' && s.tone !== 'spinning';
+    }, { timeout: 15000 });
+    const p = await probe();
+    if (p.tone !== 'half') return p;
+  }
+  return probe();
+}
 
 console.log('\n--- 0. 干净起步 ---');
-await page.goto(URL, { waitUntil: 'networkidle2', timeout: 30000 });
+await boot();
 await page.evaluate(() => localStorage.clear());
-await page.reload({ waitUntil: 'networkidle2' });
-await page.waitForFunction('window.__QUEENS_DEBUG__ && __QUEENS_DEBUG__.state.regions.length > 0',
-  { timeout: 20000 });
+await boot();
 
-console.log('\n--- 1. 首通「容易」：结算界面送一次抽奖 ---');
+console.log('\n--- 1. ?luck=none：谢谢参与，抽了就记账，外观全还锁着 ---');
+await boot(URL + '?luck=none');
 await winDaily('easy');
 let btn = await page.evaluate(() => {
   const b = document.getElementById('btnDraw');
   return b ? { hidden: b.hidden, text: b.textContent.trim() } : null;
 });
 ok('结算卡上有「抽一次奖」', !!btn && !btn.hidden && btn.text === '抽一次奖', btn);
-
-console.log('\n--- 2. 进抽奖面板：机器摆好，还没抽 ---');
 await jsClick('#btnDraw');
 await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'slot', { timeout: 5000 });
 await sleep(500);
@@ -103,49 +121,28 @@ ok('奖品条是待机档', p.tone === 'idle', p.tone);
 ok('拉杆拿得到焦点', await page.evaluate(() =>
   document.getElementById('slotLeverKnob').tabIndex === 0));
 await page.screenshot({ path: `${SHOTS}/slot-1-open.png` });
-
-console.log('\n--- 3. 空格开抽：转完出结果、记账 ---');
 await page.keyboard.press('Space');
 await page.waitForFunction(() => {
   const s = __QUEENS_DEBUG__.slot();
   return s.busy === false && s.tone !== 'idle' && s.tone !== 'spinning';
 }, { timeout: 15000 });
 p = await probe();
-ok('出了结果档位', ['lose', 'half', 'prize', 'legend'].includes(p.tone), p.tone);
-let d = await drawn();
-ok('「容易」记成抽过了', !!d.easy, JSON.stringify(d));
-await page.screenshot({ path: `${SHOTS}/slot-2-done.png` });
+ok('钉死 none → 谢谢参与', p.tone === 'lose', p.tone);
+ok('「容易」记成抽过了', !!(await drawn()).easy, JSON.stringify(await drawn()));
+ok('外观账本没动（只有每类第一套开着）', Object.keys((await unlocked()).surface).length === 1 &&
+  Object.keys((await unlocked()).mark).length === 1, await unlocked());
+await page.screenshot({ path: `${SHOTS}/slot-2-none.png` });
 
-console.log('\n--- 4. 收下：回结算界面，按钮消失 ---');
+console.log('\n--- 2. 收下：回结算界面，按钮消失 ---');
 await jsClick('#btnSlotDone');
 await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'result', { timeout: 5000 });
 btn = await page.evaluate(() => document.getElementById('btnDraw').hidden);
 ok('回到结算界面', (await sheet()) === 'result', await sheet());
 ok('抽奖按钮收掉了', btn === true, btn);
 
-console.log('\n--- 5. 重复游玩同一挡：不再给抽 ---');
-await winDaily('easy');
-btn = await page.evaluate(() => document.getElementById('btnDraw').hidden);
-ok('再通一次「容易」，没有抽奖按钮', btn === true, btn);
-ok('抽奖记录还是只有「容易」一次', Object.keys(await drawn()).length === 1, await drawn());
-await page.screenshot({ path: `${SHOTS}/slot-3-repeat.png` });
-
-console.log('\n--- 6. ?luck=jackpot：传说档点亮奖品条 ---');
-await page.evaluate(() => {
-  // 种一份「容易 + 中等都完成过」的记录，中等就是完成未抽的状态
-  const day = __QUEENS_DEBUG__.daily().day;
-  localStorage.removeItem('queens.dailydraw.v1');
-  localStorage.setItem('queens.daily.v1', JSON.stringify({
-    v: 1,
-    days: { [day]: { easy: { ms: 60000, st: 10, at: 1 }, mid: { ms: 90000, st: 20, at: 1 } } }
-  }));
-});
-await page.goto(URL + '?luck=jackpot', { waitUntil: 'networkidle2', timeout: 30000 });
-await page.waitForFunction('window.__QUEENS_DEBUG__ && __QUEENS_DEBUG__.state.regions.length > 0',
-  { timeout: 20000 });
+console.log('\n--- 3. ?luck=pair：两个一样送再抽，资格先不销 ---');
+await boot(URL + '?luck=pair');
 await winDaily('mid');
-btn = await page.evaluate(() => !document.getElementById('btnDraw').hidden);
-ok('「中等」完成未抽，按钮在', btn === true, btn);
 await jsClick('#btnDraw');
 await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'slot', { timeout: 5000 });
 await sleep(500);
@@ -155,17 +152,120 @@ await page.waitForFunction(() => {
   return s.busy === false && s.tone !== 'idle' && s.tone !== 'spinning';
 }, { timeout: 15000 });
 p = await probe();
-ok('钉死 jackpot → 传说档', p.tone === 'legend', p.tone);
-d = await drawn();
-ok('「中等」记成抽过了', !!d.mid, JSON.stringify(d));
-await page.screenshot({ path: `${SHOTS}/slot-4-jackpot.png` });
+ok('钉死 pair → 浅黄的「再抽一次」档', p.tone === 'half', p.tone);
+ok('送再抽的那下不记账', !(await drawn()).mid, JSON.stringify(await drawn()));
+await page.screenshot({ path: `${SHOTS}/slot-3-again.png` });
+// 中途收掉：资格还在，回来结算界面的按钮还亮着
+await jsClick('#btnSlotDone');
+await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'result', { timeout: 5000 });
+btn = await page.evaluate(() => document.getElementById('btnDraw').hidden);
+ok('没抽完就收下，按钮还在', btn === false, btn);
+// 再进来接着抽，抽到落定为止
+await jsClick('#btnDraw');
+await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'slot', { timeout: 5000 });
+await sleep(500);
+p = await pullUntilDone();
+ok('链条总能落定（谢谢参与或解锁）', ['lose', 'prize', 'done'].includes(p.tone), p.tone);
+ok('落定了才记账', !!(await drawn()).mid, JSON.stringify(await drawn()));
+await page.screenshot({ path: `${SHOTS}/slot-4-chain.png` });
+
+console.log('\n--- 4. ?luck=unlock：三个一样解锁对应外观 ---');
+await boot(URL + '?luck=unlock');
+// 前一节的随机链条可能顺手解锁过谁；清空账本，「奖池头一套锁着的」才是确定的「自然」
+await page.evaluate(() => { __QUEENS_DEBUG__.lookClear(); });
+await winDaily('hard');
+await jsClick('#btnDraw');
+await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'slot', { timeout: 5000 });
+await sleep(500);
+await page.keyboard.press('Space');
+await page.waitForFunction(() => {
+  const s = __QUEENS_DEBUG__.slot();
+  return s.busy === false && s.tone !== 'idle' && s.tone !== 'spinning';
+}, { timeout: 15000 });
+p = await probe();
+ok('钉死 unlock → 大奖档', p.tone === 'prize', p.tone);
+ok('奖品条上写着「解锁」', /解锁/.test(p.prize), p.prize);
+ok('「困难」记成抽过了', !!(await drawn()).hard, JSON.stringify(await drawn()));
+const led = await unlocked();
+ok('奖池头一套锁着的外观（自然）进了账本',
+  led.surface.nature === true && led.surface.sky !== true, led.surface);
+await page.screenshot({ path: `${SHOTS}/slot-5-unlock.png` });
+// 外观面板里：解锁的那套摘了锁，别的还锁着（浮层互斥，先收下抽奖再开展柜）
+await jsClick('#btnSlotDone');
+await sleep(500);
+await page.evaluate(() => { __QUEENS_DEBUG__.openLook(); });
+await page.waitForFunction(() => !document.getElementById('lookWrap').hidden, { timeout: 5000 });
+await sleep(320);
+const lk = await page.evaluate(() => {
+  const get = k => [...document.querySelectorAll('#' + k + 'Row .showcase')]
+    .map(b => ({ id: b.dataset[k], locked: b.classList.contains('is-lock' + 'ed') }));
+  return { surface: get('surface'), mark: get('mark'), piece: get('piece'), life: get('life') };
+});
+ok('「自然」解锁后摘了小锁', lk.surface.find(x => x.id === 'nature').locked === false);
+ok('其它没抽到的还锁着',
+  lk.surface.filter(x => x.id !== 'geo' && x.id !== 'nature').every(x => x.locked) &&
+  lk.mark.every(x => x.locked === (x.id !== 'x')) &&
+  lk.piece.every(x => x.locked === (x.id !== 'queen')) &&
+  lk.life.every(x => x.locked === (x.id !== 'heart')), lk);
+await page.keyboard.press('Escape');
+await sleep(300);
+
+console.log('\n--- 5. 抽中已解锁的（占位小份）：也送一次再抽 ---');
+// 「自然」已经解开了，但奖池里占位的还有每类的第一套；?luck=repeat 钉死这一种
+await page.evaluate(() => { __QUEENS_DEBUG__.dailyDrawClear(); });
+await boot(URL + '?luck=repeat');
+await winDaily('hard');
+await jsClick('#btnDraw');
+await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'slot', { timeout: 5000 });
+await sleep(500);
+await page.keyboard.press('Space');
+await page.waitForFunction(() => {
+  const s = __QUEENS_DEBUG__.slot();
+  return s.busy === false && s.tone !== 'idle' && s.tone !== 'spinning';
+}, { timeout: 15000 });
+p = await probe();
+ok('三个一样但那套已解锁 → 也送再抽', p.tone === 'half', p.tone);
+ok('这一下同样不记账', !(await drawn()).hard, JSON.stringify(await drawn()));
+ok('奖品条说明「已经解锁」', /已经解锁/.test(p.prize), p.prize);
+await page.screenshot({ path: `${SHOTS}/slot-6-repeat.png` });
+// 接着抽到落定
+p = await pullUntilDone();
+ok('链条落定', ['lose', 'prize', 'done'].includes(p.tone), p.tone);
+ok('落定了记账', !!(await drawn()).hard, JSON.stringify(await drawn()));
+
+console.log('\n--- 6. 外观全都解锁了：转不出任何奖励 ---');
+await boot();
+await page.evaluate(() => {
+  __QUEENS_DEBUG__.lookUnlockAll();
+  __QUEENS_DEBUG__.dailyDrawClear();
+});
+await winDaily('mid');
+await jsClick('#btnDraw');
+await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'slot', { timeout: 5000 });
+await sleep(500);
+await page.keyboard.press('Space');
+await page.waitForFunction(() => {
+  const s = __QUEENS_DEBUG__.slot();
+  return s.busy === false && s.tone !== 'idle' && s.tone !== 'spinning';
+}, { timeout: 15000 });
+p = await probe();
+ok('都抽完了 → 「全都解锁」档', p.tone === 'done', p.tone);
+ok('奖品条明说没有奖励', /全都解锁/.test(p.prize), p.prize);
+ok('照样记账（这一挡抽过了）', !!(await drawn()).mid, JSON.stringify(await drawn()));
+await page.screenshot({ path: `${SHOTS}/slot-7-done.png` });
+await jsClick('#btnSlotDone');
+await sleep(400);
 
 console.log('\n--- 7. ?slot=hard：直接开面板的测试模式 ---');
 // 前面留下的已解开局会被 boot 恢复成结算层，?slot= 会礼让几拍再接管——
 // 这正是要测的行为：等它开出来就行。
-await page.goto(URL + '?slot=hard&luck=triple', { waitUntil: 'networkidle2', timeout: 30000 });
-await page.waitForFunction('window.__QUEENS_DEBUG__ && __QUEENS_DEBUG__.state.regions.length > 0',
-  { timeout: 20000 });
+await boot(URL + '?slot=hard&luck=unlock');
+// 前几节把「困难」抽过了、第 6 节还把外观全解开了；账都清掉，
+// 才能验证「钉死 unlock 真落在大奖档」「测试模式这一抽没记上新账」
+await page.evaluate(() => {
+  __QUEENS_DEBUG__.lookClear();
+  __QUEENS_DEBUG__.dailyDrawClear();
+});
 await page.waitForFunction(() => __QUEENS_DEBUG__.sheet() === 'slot', { timeout: 6000 });
 await sleep(500);
 p = await probe();
@@ -179,14 +279,13 @@ await page.waitForFunction(() => {
   return s.busy === false && s.tone !== 'idle' && s.tone !== 'spinning';
 }, { timeout: 15000 });
 p = await probe();
-ok('?luck=triple 钉成中奖档', p.tone === 'prize', p.tone);
-d = await drawn();
-// 账本里 easy/mid 是前几节记下的；「困难」这次抽了不许记
-ok('测试模式抽了不记账', !d.hard, JSON.stringify(d));
+ok('?luck=unlock 钉成大奖档', p.tone === 'prize', p.tone);
+// 账本里前面几节已经解开了自然等；「困难」这次抽了不许记
+ok('测试模式抽了不记账', !(await drawn()).hard, JSON.stringify(await drawn()));
 await jsClick('#btnSlotDone');
 await sleep(400);
 ok('收下后不回结算层（本来就没有这一局）', (await sheet()) === null, await sheet());
-await page.screenshot({ path: `${SHOTS}/slot-5-urltest.png` });
+await page.screenshot({ path: `${SHOTS}/slot-8-urltest.png` });
 
 console.log('\n--- 8. 页面无报错 ---');
 ok('没有 pageerror / console.error', errs.length === 0, errs);

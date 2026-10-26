@@ -413,6 +413,8 @@ const s3 = await snap();
 await shuffle(s3.seed);
 await page.click('#btnLook');
 await sleep(420);
+// 血条是锁着的外观，测试要用先解锁（探针顺带刷新展柜的锁）
+await page.evaluate(() => { __QUEENS_DEBUG__.lookUnlock('life', 'bar'); });
 await page.evaluate(() => document.querySelector('#lifeRow [data-life="bar"]').click());
 await sleep(300);
 const bar = await page.evaluate(() => {

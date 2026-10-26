@@ -18,6 +18,9 @@ export var STORE_DAILY = 'queens.daily.v1';
 /* 每日挑战的抽奖记录（哪个挡抽过了，见 core/draw.js）。跟完成记录分开存：
  * 完成记录会被重复游玩覆盖，说不了「头一回」。 */
 export var STORE_DAILY_DRAW = 'queens.dailydraw.v1';
+/* 外观解锁账本（哪几套样式抽出来了，见 core/unlock.js）。
+ * 跟设置分开存：换哪套是偏好（settings），有没有抽到是家底（这里）。 */
+export var STORE_LOOKS = 'queens.looks.v1';
 
 /* 设置的存档版本：改了某个默认值、又想让老存档跟上新默认值时 +1。
  *   v2：淡化 × 改成默认关闭（一铺半盘的 × 全淡下去，反而看不出棋盘的进度）。

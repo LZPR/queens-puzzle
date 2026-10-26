@@ -8,9 +8,17 @@
  *     三条转轮按速度动态模糊、奖品条按结果分档点亮；
  *   · 不用抽奖券：面板开着就能抽，抽一次就完（resolve 时 markDrawn），
  *     转动中 Esc 关不掉（canClose 拦住），抽完「收下」回结算界面；
- *   · 概率由 drawOutcome() 统一控（三连 0.6% / 三个一样 5.4% / 两个一样 24% /
- *     空 70%），?luck=triple|pair|none|jackpot 可以钉死档位，给自动化测试用；
- *   · 具体奖励还没定：奖品表 PRIZES 先照原型占位，发奖逻辑等定下来再接。
+ *   · 奖品就是外观（core/unlock.js 的账本）：三个一样 = 解锁那套外观；
+ *     两个一样 = 送一次再抽；抽中的那套已经解锁了 = 也送一次再抽。
+ *     送的那次不销资格（不 markDrawn），一直转到真的落定为止；
+ *   · 奖池里锁着的套占大多数、已解锁的只是占位的小份——转出来的
+ *     「三个一样」绝大多数都是还没到手的；
+ *   · 外观全都解锁了之后机器还在，但转不出任何奖励；
+ *   · 概率由 drawOutcome() 统一控（三样解锁 15% / 两样再抽 44% /
+ *     谢谢参与 41%），?luck=unlock|repeat|pair|none 可以钉死档位（只钉一抽），
+ *     给自动化测试用；
+ *   · ?slot=easy|mid|hard|extreme 开机直接把面板拉起来（测试模式，
+ *     抽了不记账）。
  * ========================================================================== */
 
 import { buzz, sfx } from '../../core/audio.js';
@@ -18,8 +26,12 @@ import { DIFF_BANDS } from '../../core/config.js';
 import { fxEl } from '../../core/dom.js';
 import { markDrawn } from '../../core/draw.js';
 import { DAILY_TIERS, dayKey, dayLabel } from '../../core/daily.js';
+import { REGION_COLORS } from '../../core/palette.js';
 import { createSheet } from '../../core/sheet.js';
 import { state, view } from '../../core/state.js';
+import { allUnlocked, isUnlocked, unlock } from '../../core/unlock.js';
+import { KIND, KINDS, listOf } from '../../looks/index.js';
+import { surfaceInk } from '../../game/skin.js';
 import { showResult } from './result.js';
 
 export var HTML = /* html */ `
@@ -84,7 +96,7 @@ export var HTML = /* html */ `
       <div class="slot-prize-ico" id="slotPrizeIco"></div>
       <div class="slot-prize-txt">
         <b id="slotPrizeName">拉动右侧的杆子</b>
-        <span id="slotPrizeNote">拖动或按空格开抽</span>
+        <span id="slotPrizeNote">三个一样解锁外观 · 两个一样再抽一次</span>
       </div>
     </section>
 
@@ -113,20 +125,13 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 /* ==========================================================
-   1. 奖品：符号即奖品（奖励待定，名字先照原型占位）
+   1. 奖池：转轮上转的就是外观（looks/index.js 登记的全部套目）
    ========================================================== */
+/* 转轮里只有两枚符号不是外观：「谢谢参与」的空圈与「全都解锁了」的皇冠，
+ * 都不进奖池。 */
 var ICONS = {
-  hint: `<path d="M12 3.4a5.7 5.7 0 0 0-3.4 10.3c.6.45 1 1.1 1 1.85V16h4.8v-.45c0-.75.4-1.4 1-1.85A5.7 5.7 0 0 0 12 3.4z"/>
-         <path d="M10.2 19.2h3.6M11 21.4h2"/>`,
-  undo: `<path d="M4.2 10h9.4a5.1 5.1 0 0 1 0 10.2H8.4"/>
-         <path d="M8.4 5.5 3.9 10l4.5 4.5"/>`,
-  ticket: `<path d="M4 8.6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1.1a2.35 2.35 0 0 0 0 4.6v1.1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1.1a2.35 2.35 0 0 0 0-4.6z"/>
-           <path d="M14.2 7.6v8.8" stroke-dasharray="2 2.6"/>`,
   crown: `<path d="M3.4 7.4l4.1 3.2L12 5l4.5 5.6 4.1-3.2-1.8 11.1H5.2z"/>
           <path d="M7 15.6h10"/>`,
-  star: `<path d="M12 3.2l2.7 5.6 6.1.86-4.44 4.3 1.07 6.05L12 17.05l-5.43 2.96 1.07-6.05L3.2 9.66l6.1-.86z"/>`,
-  gem: `<path d="M7.2 3.6h9.6l3.9 6.1-8.7 10.9-8.7-10.9z"/>
-        <path d="M3.2 9.7h17.6M9.2 9.7 12 20.4l2.8-10.7L12 3.6z"/>`,
   /* 只在「什么都没中」的奖品条上用，不进转轮 */
   blank: `<circle cx="12" cy="12" r="7.4" stroke-dasharray="3.2 3.4"/>
           <path d="M9.5 12h5"/>`
@@ -136,42 +141,117 @@ function icon(k) {
   return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[k] + '</svg>';
 }
 
-var PRIZES = {
-  hint:   { full: '提示券 ×1',  half: '提示券 ×1',  note: '卡住时点一下，替你摆一颗' },
-  undo:   { full: '撤销券 ×1',  half: '撤销券 ×1',  note: '多退一步，少一步悔恨' },
-  ticket: { full: '抽奖券 ×1',  half: '抽奖券 ×1',  note: '奖励待定 · 先占个位' },
-  crown:  { full: '皇冠 ×1',    half: '皇冠碎片 ×1', note: '奖励待定 · 先占个位' },
-  star:   { full: '免提示卡',   half: '提示券 ×2',  note: '这一局什么时候都能看提示' },
-  gem:    { full: '钻石 ×30',   half: '钻石 ×12',   note: '奖励待定 · 先占个位' }
-};
+/* 转轮符号的键是「kind:id」——四类外观里 id 各自起名，跨类可能撞，
+ * 拼上类别才唯一定位到一套。 */
+function entryKey(e) { return e.kind + ':' + e.o.id; }
 
-var KEYS = Object.keys(PRIZES);
-var WEIGHT = { hint: 30, undo: 26, ticket: 17, crown: 12, star: 9, gem: 6 };
+/* 奖池的快照： locks 状态是活的（这一抽解锁了，下一抽就少一件），
+ * 所以每次拉杆都重新抄一遍，别缓存。 */
+function buildPool() {
+  var out = [];
+  for (var k = 0; k < KINDS.length; k++) {
+    var kind = KINDS[k];
+    var items = listOf(kind);
+    for (var i = 0; i < items.length; i++) {
+      out.push({ kind: kind, o: items[i], locked: !isUnlocked(kind, items[i].id) });
+    }
+  }
+  return out;
+}
 
-function pickSymbol(exclude) {
-  var pool = KEYS.filter(function (k) { return k !== exclude; });
+/* 奖池的分量：没解锁的占大多数，已解锁的只是占位的小份
+ * （5 : 1 —— 11 套里默认开 4 套，锁着的 7 套合计 35 份 vs 占位 4 份）。
+ * 权重是按套算的，不按类偏心。 */
+var WEIGHT_OPEN = 5, WEIGHT_GOT = 1;
+
+function pickEntry(pool, exclude) {
   var total = 0, i;
-  for (i = 0; i < pool.length; i++) total += WEIGHT[pool[i]];
+  for (i = 0; i < pool.length; i++) {
+    if (exclude && entryKey(pool[i]) === exclude) continue;
+    total += pool[i].locked ? WEIGHT_OPEN : WEIGHT_GOT;
+  }
   var r = Math.random() * total;
   for (i = 0; i < pool.length; i++) {
-    r -= WEIGHT[pool[i]];
+    if (exclude && entryKey(pool[i]) === exclude) continue;
+    r -= pool[i].locked ? WEIGHT_OPEN : WEIGHT_GOT;
     if (r <= 0) return pool[i];
   }
   return pool[pool.length - 1];
 }
 
-function pickDistinct(n) {
+/* 锁着的套里按登记顺序数第一套：?luck=unlock 用它钉出确定的结果 */
+function firstLocked(pool) {
+  for (var i = 0; i < pool.length; i++) if (pool[i].locked) return pool[i];
+  return null;
+}
+
+function pickDistinctKeys(pool, n) {
   var out = [];
   while (out.length < n) {
-    var k = pickSymbol();
-    if (out.indexOf(k) < 0) out.push(k);
+    var e = pickEntry(pool);
+    if (out.indexOf(entryKey(e)) < 0) out.push(entryKey(e));
   }
   return out;
 }
 
-/* 档位：三连 0.6% + 三个一样 5.4% + 两个一样 24% + 空 70%
-   ?luck=triple / pair / none / jackpot 可以钉死档位，专门用来看某一种结局 */
+/* ---- 转轮 / 奖品条上的小画：按外观自己的画法缩一份 ---- */
+var SKIN_PICKS = [8, 14, 5, 10];   // 色块预览用哪四块色（跟外观展柜同一组）
+
+function symIcon(e) {
+  var o = e.o;
+  /* 色块：一小块 2×2 的盘（底色 + 图形），浓度放大的路数跟外观展柜一样——
+   * 缩到这么小还按棋盘的浓度画就等于什么都没画。 */
+  if (e.kind === 'surface') {
+    var c = 50;
+    var k = o.motifs ? Math.max(.02, Math.min(.5, (o.tone || 0) * 3.2)) : 0;
+    var out = '';
+    for (var i = 0; i < 4; i++) {
+      var ci = SKIN_PICKS[i] % REGION_COLORS.length;
+      var color = REGION_COLORS[ci];
+      var x = (i % 2) * c, y = ((i / 2) | 0) * c;
+      out += '<rect x="' + x + '" y="' + y + '" width="' + c + '" height="' + c +
+        '" fill="' + color + '"/>';
+      if (o.motifs && o.motifs[ci]) {
+        out += '<g transform="translate(' + x + ' ' + y + ') scale(.5)" fill="' +
+          surfaceInk(color, o, k) + '">' + o.motifs[ci] + '</g>';
+      }
+    }
+    return '<svg viewBox="0 0 100 100" style="stroke:none" aria-hidden="true">' + out + '</svg>';
+  }
+  /* 叉：跟棋盘上一套比例的两根斜杠 / 圆点 */
+  if (e.kind === 'mark') {
+    return o.preview === 'dot'
+      ? '<svg viewBox="0 0 24 24" style="stroke:none" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="5.6" fill="currentColor"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  }
+  /* 生命：插件里只有名字，画在这里——一颗心 / 一格血条 */
+  if (e.kind === 'life') {
+    return o.id === 'bar'
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+        '<rect x="3" y="7.5" width="18" height="9" rx="2.5"/>' +
+        '<rect x="5.6" y="9.9" width="8.6" height="4.2" rx="1.2" fill="currentColor" stroke="none"/></svg>'
+      : '<svg viewBox="0 0 24 24" style="stroke:none" aria-hidden="true">' +
+        '<path fill="currentColor" d="M12 20.2S3.6 15 3.6 9.3C3.6 6.4 5.9 4.6 8.2 4.6c1.7 0 3 .9 3.8 2.1' +
+        '.8-1.2 2.1-2.1 3.8-2.1 2.3 0 4.6 1.8 4.6 4.7C20.4 15 12 20.2 12 20.2z"/></svg>';
+  }
+  /* 皇后：直接用插件的整段画。转轮的 CSS 给 svg 上的是描边那套，
+   * 剪影是填色的，垫一行 style 压回去。 */
+  return o.svg.replace('<svg ', '<svg style="fill:currentColor;stroke:none" ');
+}
+
+/* 档位：三个一样 15%（锁着的 → 解锁；占位 → 也送一次再抽）
+   + 两个一样 44%（送一次再抽）+ 谢谢参与 41%（到此为止）。
+   ?luck=unlock|repeat|pair|none 可以钉死档位，专门用来看某一种结局；
+   钉的那一下只管一抽，下一抽回到真随机（不然测试里两个一样的链条走不完）。 */
 var FORCE = new URLSearchParams(location.search).get('luck');
+if (FORCE && ['unlock', 'repeat', 'pair', 'none'].indexOf(FORCE) < 0) FORCE = null;
+
+function forceOnce() {
+  var f = FORCE;
+  FORCE = null;
+  return f;
+}
 
 /* ?slot=easy|mid|hard|extreme：开机直接把抽奖面板拉起来，而且抽了不记账——
    专门用来看机器、调手感，不用先去赢一盘每日挑战。跟 ?luck= 可以叠着用。 */
@@ -181,26 +261,47 @@ var TEST_TIER = (function () {
 })();
 
 function drawOutcome() {
-  var r = Math.random(), tier;
-  if (r < 0.006) tier = 'jackpot';
-  else if (r < 0.06) tier = 'triple';
-  else if (r < 0.30) tier = 'pair';
-  else tier = 'none';
-  if (FORCE && ['jackpot', 'triple', 'pair', 'none'].indexOf(FORCE) >= 0) tier = FORCE;
+  var pool = buildPool();
 
-  var i, s, o, arr;
-  if (tier === 'none') return { tier: tier, reels: pickDistinct(3), prize: null };
-
-  if (tier === 'pair') {
-    s = pickSymbol();
-    o = pickSymbol(s);
-    arr = [s, s, o].sort(function () { return Math.random() - 0.5; });
-    return { tier: tier, reels: arr, prize: { key: s, half: true } };
+  /* 都抽完了：机器照转，但转不出任何东西——没有奖励、也没有再抽 */
+  if (allUnlocked()) {
+    return { tier: 'done', extra: false, reels: pickDistinctKeys(pool, 3), prize: null };
   }
 
-  // 三个一样：大奖只从最稀的两个里出
-  var key = tier === 'jackpot' ? (Math.random() < 0.68 ? 'gem' : 'star') : pickSymbol();
-  return { tier: tier, reels: [key, key, key], prize: { key: key, half: false } };
+  var tier = forceOnce();
+  if (!tier) {
+    var r = Math.random();
+    tier = r < 0.15 ? 'unlock' : r < 0.59 ? 'pair' : 'none';
+  }
+
+  /* 三个一样：锁着的 → 解锁它；抽中的是占位（已解锁）→ 也送一次再抽 */
+  if (tier === 'unlock') {
+    var e = firstLocked(pool);
+    /* 钉着要解锁但手里一套锁都没了：落回「都抽完了」 */
+    if (!e) return { tier: 'done', extra: false, reels: pickDistinctKeys(pool, 3), prize: null };
+    var key = entryKey(e);
+    return {
+      tier: e.locked ? 'unlock' : 'repeat',
+      extra: !e.locked,
+      reels: [key, key, key],
+      prize: e
+    };
+  }
+  /* 钉着要「已解锁的三个一样」：拿奖池头一枚（出厂默认那套，永远开着） */
+  if (tier === 'repeat') {
+    var head = pool[0], k2 = entryKey(head);
+    return { tier: 'repeat', extra: true, reels: [k2, k2, k2], prize: head };
+  }
+
+  if (tier === 'pair') {
+    var s = pickEntry(pool), o = pickEntry(pool, entryKey(s));
+    var arr = [entryKey(s), entryKey(s), entryKey(o)].sort(function () {
+      return Math.random() - 0.5;
+    });
+    return { tier: 'pair', extra: true, reels: arr, prize: s };
+  }
+
+  return { tier: 'none', extra: false, reels: pickDistinctKeys(pool, 3), prize: null };
 }
 
 /* ==========================================================
@@ -320,20 +421,32 @@ var reels = [];
 function buildStrip(strip, keys) {
   var out = '';
   for (var i = 0; i < keys.length; i++) {
-    out += '<div class="slot-sym" data-k="' + keys[i] + '">' + icon(keys[i]) + '</div>';
+    out += '<div class="slot-sym" data-k="' + keys[i] + '">' + symIconByKey(keys[i]) + '</div>';
   }
   strip.innerHTML = out;
+}
+
+/* 按键取画：转轮上滚的每一格都查它（filler 格随机填的也是外观） */
+function symIconByKey(key) {
+  var i = key.indexOf(':');
+  var kind = key.slice(0, i), id = key.slice(i + 1);
+  var items = listOf(kind) || [];
+  for (var j = 0; j < items.length; j++) {
+    if (items[j].id === id) return symIcon({ kind: kind, o: items[j] });
+  }
+  return icon('blank');
 }
 
 /* 开面板先摆一盘：摆成「每行三个都不一样」的九宫格，别让中奖线
    一开机就三条同花，看着像已经中过了。 */
 function idleFill() {
   if (!el || el.hidden || !reels.length) return;
+  var pool = buildPool();
   var grid = [[], [], []];
   for (var row = 0; row < 3; row++) {
     for (var col = 0; col < 3; col++) {
       var k, n = 0;
-      do { k = pickSymbol(); n++; }
+      do { k = entryKey(pickEntry(pool)); n++; }
       while ((grid[row].indexOf(k) >= 0 || grid[0][col] === k) && n < 24);
       grid[row][col] = k;
     }
@@ -432,12 +545,13 @@ function spinReel(i, midKey, dur) {
   var cell = r.el.offsetHeight / 3;
   var N = 24;
 
+  var pool = buildPool();
   var keys = [];
-  for (var j = 0; j < N; j++) keys.push(pickSymbol());
+  for (var j = 0; j < N; j++) keys.push(entryKey(pickEntry(pool)));
   // 最后三格决定停下来时窗口里的三行（中间那行是中奖线）
-  keys[N - 4] = pickSymbol(midKey);
+  keys[N - 4] = entryKey(pickEntry(pool, midKey));
   keys[N - 3] = midKey;
-  keys[N - 2] = pickSymbol(midKey);
+  keys[N - 2] = entryKey(pickEntry(pool, midKey));
   buildStrip(r.strip, keys);
 
   var dist = (N - 4) * cell;
@@ -520,43 +634,58 @@ async function trigger() {
 
   /* 三轮停下的间隔就是悬念的长度；有戏的时候第三轮再多吊一会儿 */
   var durs = [1080, 1620, 2160];
-  if (out.tier !== 'none') durs[2] += 420;
+  if (out.tier === 'unlock' || out.tier === 'repeat') durs[2] += 420;
 
   await Promise.all(reels.map(function (_, i) { return spinReel(i, out.reels[i], durs[i]); }));
 
   resolve(out);
 
-  // 资格到此为止：标记这一挡今天抽过了（core/draw.js）。
+  // 这一抽落定了才算抽过（core/draw.js）：两个一样、或者抽中的那套已经解锁，
+  // 都送一次再抽——资格先不销，拉杆接着抽，直到谢谢参与 / 真解锁 / 全都解锁。
   // 测试模式（?slot=）不记，方便反复试。
-  if (!testMode && state.daily) markDrawn(state.daily.day, state.daily.tier);
+  if (!out.extra && !testMode && state.daily) markDrawn(state.daily.day, state.daily.tier);
 
   busy = false;
   document.getElementById('slot').classList.remove('is-spinning');
 }
 
 function resolve(out) {
-  if (!out.prize) {
+  /* 谢谢参与：三个都不重样 */
+  if (out.tier === 'none') {
     sfx('slotLose');
-    setPrize('lose', icon('blank'), '谢谢参与', '三个都不重样 · 明天再来');
+    setPrize('lose', icon('blank'), '谢谢参与', '三个都不重样 · 明天的每日挑战再来看');
     return;
   }
 
-  var p = PRIZES[out.prize.key];
-  var name = out.prize.half ? p.half : p.full;
-  var note = out.prize.half ? '两个一样 · 半份奖' : '三个一样！';
-
-  if (out.tier === 'jackpot') {
-    sfx('slotBig');
-    confetti(70);
-    setPrize('legend', icon(out.prize.key), name, note + ' · 传说档');
-  } else if (out.tier === 'triple') {
-    sfx('slotWin');
-    confetti(48);
-    setPrize('prize', icon(out.prize.key), name, note);
-  } else {
-    sfx('slotSmall');
-    setPrize('half', icon(out.prize.key), name, note);
+  /* 都抽完了：机器还在，奖励没有了 */
+  if (out.tier === 'done') {
+    sfx('slotLose');
+    setPrize('done', icon('crown'), '外观全都解锁了', '没有新的奖励了 · 谢谢参与');
+    return;
   }
+
+  var e = out.prize;
+  var nm = KIND[e.kind].label + '「' + e.o.name + '」';
+
+  /* 三个一样，而且这套还是锁着的：解锁，落定 */
+  if (out.tier === 'unlock') {
+    unlock(e.kind, e.o.id);
+    sfx('slotBig');
+    confetti(64);
+    setPrize('prize', symIcon(e), nm + ' 解锁！', '去外观面板换上它');
+    return;
+  }
+
+  /* 抽中的那套已经解锁（占位的小份）：不值钱，送一次再抽 */
+  if (out.tier === 'repeat') {
+    sfx('slotSmall');
+    setPrize('half', symIcon(e), nm + '已经解锁', '再抽一次');
+    return;
+  }
+
+  /* 两个一样：小奖不算中，送一次再抽 */
+  sfx('slotSmall');
+  setPrize('half', symIcon(e), '两个「' + e.o.name + '」', '再抽一次');
 }
 
 /* ==========================================================
@@ -575,7 +704,7 @@ function paint() {
   }
   busy = false;
   lever.dragging = false;
-  setPrize('idle', icon('ticket'), '拉动右侧的杆子', '拖动或按空格开抽');
+  setPrize('idle', icon('crown'), '拉动右侧的杆子', '三个一样解锁外观 · 两个一样再抽一次');
 }
 
 export function openSlot() {

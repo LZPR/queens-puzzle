@@ -15,6 +15,8 @@ import { doSave, loadGame, loadSettings } from './core/storage.js';
 import * as daily from './core/daily.js';
 import * as draw from './core/draw.js';
 import * as records from './core/records.js';
+import { clear as clearLooks, snapshot as looksSnapshot, unlockAll as unlockAllLooks,
+  unlock as unlockLook } from './core/unlock.js';
 import { closeTopSheet } from './core/sheet.js';
 import { announce } from './core/utils.js';
 import { buildBoard, buildRegionBar } from './game/board.js';
@@ -226,6 +228,12 @@ window.__QUEENS_DEBUG__ = {
       life: settings.lifeStyle
     };
   },
+  // 外观解锁账本：解锁一套 / 全解开 / 清空 / 快照，只给 tools/ 里的自动化测试用。
+  // 解开的同时把外观面板的锁同步掉（applyLook 顺带 syncLook），测试不用先关再开面板
+  lookUnlock: function (kind, id) { var r = unlockLook(kind, id); if (r) applyLook(); return r; },
+  lookUnlockAll: function () { if (unlockAllLooks()) applyLook(); },
+  lookClear: function () { clearLooks(); applyLook(); },
+  lookUnlocked: looksSnapshot,
   openLook: openLook,
   closeLook: closeLook
 };

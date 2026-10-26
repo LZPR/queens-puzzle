@@ -270,6 +270,9 @@ console.log('\n--- 换过外观之后 ---');
 await setup();
 await sleep(900);          // 等它淡好（0.5s 防抖 + 0.3s 过渡）
 await page.evaluate(() => {
+  // 点与猫现在是锁着的外观，测试要用先解锁（探针顺带刷新展柜）
+  __QUEENS_DEBUG__.lookUnlock('mark', 'dot');
+  __QUEENS_DEBUG__.lookUnlock('piece', 'cat');
   document.getElementById('btnLook').click();
 });
 await sleep(320);
