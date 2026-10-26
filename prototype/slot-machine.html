@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#FEF3E2" />
+<title>幸运老虎机 · 原型</title>
+<!--
+  抽奖系统原型（未接入主项目）
+  ---------------------------------------------------------------
+  视觉沿用 src/styles/base/tokens.css 那套：奶油纸底 + 墨线描边 + 硬投影 + 弹性曲线。
+  并入主项目时：把 <style> 拆成 src/styles/panels/slot.css，<script> 拆成
+  src/js/ui/panels/slot.js（图标走 ICONS 表，面板外壳走 core/sheet.js 的 createSheet）。
+-->
+<style>
+/* ============================================================
+   0. 令牌（与主项目同源，加几个本地量）
+   ============================================================ */
+:root {
+  --bg-body: #FEF3E2;
+  --bg-card: #FFFFFF;
+  --bg-neutral: #F1E8DA;
+
+  --ink: #3A3335;
+  --ink-mute: #8D8285;
+  --ink-faint: #C9BCA8;
+
+  --accent: #FFD93D;
+  --accent-soft: #FFF0B8;
+  --danger: #FF5C5C;
+  --ok: #22B573;
+
+  --spring: cubic-bezier(.175, .885, .32, 1.275);
+  --spring-soft: cubic-bezier(.2, 1.35, .45, 1);
+
+  /* 机身与拉杆的尺寸：全部由这两个量推出来，改一个整台机器跟着变 */
+  --cell: clamp(66px, 17.2vw, 88px);      /* 单格符号高度；窗口 = 3 格 */
+  --lever-col: clamp(96px, 27vw, 126px);  /* 拉杆那一列的宽 */
+  --lever-len: calc(var(--lever-col) - 14px);
+  --knob: clamp(38px, 11.4vw, 46px);
+
+  /* 拉杆角度（单位 deg，写进 calc 所以不带单位） */
+  --rest: 18;
+  --full: 58;
+  --pivot-y: 26px;                         /* 轴心离拉杆列底边的高度 */
+}
+
+/* --pull：0 = 收着，1 = 拉到底。
+   注册成 <number> 才能被 transition 插值 —— 滑杆本身、轨道上的进度点都读它，
+   于是一次 transition 就把「杆子回弹 + 打点退格」一起带动了。 */
+@property --pull {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+
+body {
+  display: flex;
+  margin: 0;
+  background: var(--bg-body);
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, #FFF9EC 0%, rgba(255,249,236,0) 55%),
+    radial-gradient(90% 60% at 100% 110%, #FBE9CF 0%, rgba(251,233,207,0) 60%);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overflow-x: hidden;
+}
+
+button { font: inherit; color: inherit; touch-action: manipulation; cursor: pointer; }
+:focus { outline: none; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  padding: 0; overflow: hidden; clip-path: inset(50%); border: 0;
+}
+
+/* ============================================================
+   1. 页面骨架
+   ============================================================ */
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 468px;
+  margin: auto;
+  padding: 18px 14px 26px;
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.brand { flex: 1 1 auto; min-width: 0; }
+
+.brand-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2.2px;
+  color: var(--ink-faint);
+}
+
+.brand-title {
+  margin: 1px 0 0;
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: .5px;
+  line-height: 1.1;
+}
+
+.tickets {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 5px 11px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  box-shadow: 0 2px 0 var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tickets b {
+  font-size: 15px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.tickets.is-empty { background: var(--bg-neutral); color: var(--ink-mute); }
+
+.tickets svg {
+  align-self: center;
+  width: 13px;
+  height: 13px;
+  margin-right: 1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sound-btn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--bg-card);
+  box-shadow: 0 2px 0 var(--ink);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.sound-btn:active { transform: translateY(2px); box-shadow: none; }
+.sound-btn[aria-pressed="false"] { color: var(--ink-faint); }
+.sound-btn svg { width: 17px; height: 17px; }
+
+/* ============================================================
+   2. 机身 + 拉杆
+   ============================================================ */
+.stage {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.machine { flex: 1 1 auto; min-width: 0; }
+
+.machine.is-kick { animation: kick .34s ease-out; }
+
+@keyframes kick {
+  0%   { transform: translateY(0) rotate(0); }
+  20%  { transform: translateY(4px) rotate(-.6deg); }
+  58%  { transform: translateY(-1px) rotate(.35deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+
+/* ---------- 柜体 ---------- */
+.cab {
+  position: relative;
+  padding: 8px 8px 0;
+  border: 3px solid var(--ink);
+  border-radius: 24px;
+  background: linear-gradient(180deg, #FFF9EC 0%, #FFEED3 62%, #FFE3BE 100%);
+  box-shadow: 0 7px 0 var(--ink), 0 16px 26px -12px rgba(58,51,53,.45);
+}
+
+/* 顶部那道高光，让柜面看起来是漆过的 */
+.cab::before {
+  content: "";
+  position: absolute;
+  inset: 3px 3px auto;
+  height: 42%;
+  border-radius: 21px 21px 60% 60% / 21px 21px 34px 34px;
+  background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,0));
+  pointer-events: none;
+}
+
+/* ---------- 跑马灯（上下各一排小圆点） ---------- */
+.marquee {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 4px 6px;
+}
+
+.marquee i {
+  flex: 1 1 auto;
+  max-width: 9px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1.5px rgba(58,51,53,.55);
+  opacity: .35;
+  animation: bulb 1.9s linear infinite;
+  animation-delay: calc(var(--i) * -0.19s);
+}
+
+body.is-spinning .marquee i { animation-duration: .42s; }
+
+@keyframes bulb {
+  0%, 40% { opacity: .28; }
+  55%, 90% { opacity: 1; }
+  100% { opacity: .28; }
+}
+
+/* ---------- 转轮窗口 ---------- */
+.window {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: #2C2628;
+  box-shadow:
+    inset 0 8px 16px -6px rgba(0,0,0,.7),
+    inset 0 -8px 16px -6px rgba(0,0,0,.55);
+}
+
+.reel {
+  position: relative;
+  height: calc(var(--cell) * 3);
+  overflow: hidden;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #EFE0C8 0%, #FFFCF4 26%, #FFFCF4 74%, #EBDABF 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(58,51,53,.16);
+  /* 上下两头淡出，模拟鼓面卷进轴里的感觉 */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 13%, #000 87%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 13%, #000 87%, transparent 100%);
+  transition: box-shadow .18s ease;
+}
+
+.reel.is-hit {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 22px rgba(255,217,61,.75),
+    inset 0 0 0 1.5px rgba(58,51,53,.16);
+  animation: hitPop .42s var(--spring);
+}
+
+@keyframes hitPop {
+  0%   { transform: scaleY(1); }
+  35%  { transform: scaleY(1.05); }
+  100% { transform: scaleY(1); }
+}
+
+.strip {
+  display: block;
+  will-change: transform;
+}
+
+.sym {
+  display: grid;
+  place-items: center;
+  height: var(--cell);
+}
+
+.sym svg {
+  width: 62%;
+  height: 62%;
+  overflow: visible;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 中奖那条线上的符号描粗一点，隔着屏幕也能看出是哪三个 */
+.reel.is-hit .sym svg { stroke-width: 2.2; }
+
+/* 中奖线：套住中间那一格 */
+.payline {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: calc(8px + var(--cell));
+  height: var(--cell);
+  border-radius: 9px;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px rgba(255,217,61,.9),
+    inset 0 0 14px rgba(255,217,61,.28),
+    0 0 16px rgba(255,217,61,.32);
+  opacity: .55;
+  transition: opacity .2s ease;
+}
+
+body.is-spinning .payline { opacity: .22; }
+
+/* ---------- 柜脚铭牌 ---------- */
+.cab-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 0 9px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 2.6px;
+  color: var(--ink-faint);
+}
+
+.cab-foot .pull-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ink-mute);
+  animation: nudge 1.6s ease-in-out infinite;
+}
+
+@keyframes nudge {
+  0%, 100% { transform: translateY(0); opacity: .5; }
+  50% { transform: translateY(2px); opacity: 1; }
+}
+
+/* ============================================================
+   3. 拉杆
+   ============================================================ */
+.lever {
+  position: relative;
+  flex: 0 0 var(--lever-col);
+  width: var(--lever-col);
+  height: 196px;
+  --pull: 0;
+}
+
+/* 回弹交给 transition；拖动的时候关掉，否则指针跟不上 */
+.lever.is-free { transition: --pull .62s var(--spring-soft); }
+.lever.is-slam { transition: --pull .1s cubic-bezier(.4, 0, .9, .6); }
+.lever.is-drag { transition: none; }
+
+/* 轨道：一条从「收着」到「拉到底」的弧。
+   底圈是灰的，上面叠一条 pathLength=1 的黄弧，靠 --pull 拉 dashoffset 吃进度 —— 
+   同一根杆子，同一个数，拖动 / 回弹都自动跟着走。 */
+.lever-track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.lever-track path {
+  fill: none;
+  stroke-linecap: round;
+}
+
+/* 没走到的那一段画成虚线（跟面板里那些虚线分隔线一个意思）：
+   它得能看见，黄弧才读得出「走了多少」 */
+.track-base {
+  stroke: rgba(58, 51, 53, .2);
+  stroke-width: 2.5;
+  stroke-dasharray: 4 5.5;
+}
+
+.track-on {
+  stroke: var(--accent);
+  stroke-width: 3.5;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--pull));
+  /* dashoffset 走满时线尾的圆头还会剩一个小点，用透明度把它收掉 */
+  opacity: clamp(0, calc(var(--pull) * 14), 1);
+  filter: drop-shadow(0 0 3px rgba(255,217,61,.9));
+}
+
+/* 轴座：骑在机身右边缘上，压在杆子上面（杆子像是插进去的）。
+   做成「金属承口」而不是白球 —— 它得退到后面去，别跟黄头抢眼。 */
+.lever-hinge {
+  position: absolute;
+  left: -15px;
+  bottom: calc(var(--pivot-y) - 15px);
+  width: 34px;
+  height: 34px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 28%, #F6EEE0 0%, #CFC1AC 58%, #9C8D79 100%);
+  box-shadow: 0 3px 0 var(--ink), inset 0 2px 2px rgba(255,255,255,.65);
+  z-index: 3;
+}
+
+.lever-hinge::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.4);
+}
+
+.lever-arm {
+  position: absolute;
+  left: 0;
+  bottom: var(--pivot-y);
+  width: 0;
+  height: var(--lever-len);
+  transform-origin: 0 100%;
+  transform: rotate(calc((var(--rest) + var(--pull) * (var(--full) - var(--rest))) * 1deg));
+  z-index: 2;
+}
+
+.lever-rod {
+  position: absolute;
+  left: -7px;
+  bottom: 0;
+  width: 14px;
+  height: 100%;
+  border: 2.5px solid var(--ink);
+  border-radius: 7px;
+  background: linear-gradient(90deg, #FFFDF7 0%, #E8DCC9 45%, #B9AB97 100%);
+  box-shadow: 0 2px 0 rgba(58,51,53,.35);
+}
+
+.lever-knob {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--knob);
+  height: var(--knob);
+  margin-left: calc(var(--knob) / -2);
+  margin-top: calc(var(--knob) / -2);
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, #FFF2B8 0%, var(--accent) 42%, #E7A526 100%);
+  box-shadow:
+    0 3px 0 var(--ink),
+    inset 0 2px 5px rgba(255,255,255,.75),
+    inset 0 -3px 6px rgba(146,89,8,.35);
+  cursor: grab;
+  touch-action: none;
+  transition: transform .12s var(--spring), box-shadow .12s ease;
+}
+
+.lever-knob::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34%;
+  height: 34%;
+  margin: -17% 0 0 -17%;
+  border-radius: 50%;
+  border: 2px solid rgba(58,51,53,.45);
+}
+
+.lever.is-drag .lever-knob,
+.lever.is-drag .lever-knob:active {
+  cursor: grabbing;
+  transform: scale(1.06);
+  box-shadow:
+    0 1px 0 var(--ink),
+    inset 0 2px 5px rgba(255,255,255,.75),
+    inset 0 -3px 6px rgba(146,89,8,.35),
+    0 0 0 6px rgba(255,217,61,.22);
+}
+
+/* 没券了：**不能**用 opacity 或 grayscale 滤镜去糊它 ——
+   杆子是杆头的兄弟节点，半透明会把它从球里透出来，看着像颗玻璃球。
+   这颗球只能是「实心但没电」：换成灰金属的径向渐变，高光压下去一点。 */
+.lever.is-empty .lever-knob {
+  cursor: not-allowed;
+  background: radial-gradient(circle at 34% 28%, #F3ECD8 0%, #CEC39C 46%, #A2976C 100%);
+  box-shadow:
+    0 3px 0 var(--ink),
+    inset 0 2px 4px rgba(255,255,255,.55),
+    inset 0 -3px 6px rgba(90,80,68,.3);
+}
+
+.lever.is-empty .lever-knob::after { border-color: rgba(58, 51, 53, .26); }
+
+/* 轨道也一起退掉，省得旁边还挂着一条黄线 */
+.lever.is-empty .track-on { opacity: 0; }
+
+/* ============================================================
+   4. 奖品条
+   ============================================================ */
+.prize-bar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 13px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: var(--bg-card);
+  box-shadow: 0 4px 0 var(--ink);
+  transition: background .2s ease, box-shadow .2s ease;
+}
+
+.prize-ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--bg-body);
+  color: var(--ink);
+}
+
+.prize-ico svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.prize-txt { min-width: 0; }
+
+.prize-txt b {
+  display: block;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: .3px;
+  line-height: 1.25;
+}
+
+.prize-txt span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  line-height: 1.3;
+}
+
+/* 无券 / 谢谢参与：整条退成灰底 */
+.prize-bar[data-tone="lose"] .prize-ico { background: var(--bg-neutral); color: var(--ink-faint); }
+.prize-bar[data-tone="lose"] b { color: var(--ink-mute); }
+
+/* 转动中：图标位置放一撮点 */
+.prize-bar[data-tone="spinning"] .prize-ico { background: var(--bg-neutral); }
+
+.dots-load { display: flex; gap: 3px; }
+.dots-load i {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--ink-faint);
+  animation: dotload 1s ease-in-out infinite;
+}
+.dots-load i:nth-child(2) { animation-delay: .12s; }
+.dots-load i:nth-child(3) { animation-delay: .24s; }
+
+@keyframes dotload {
+  0%, 100% { opacity: .25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* 中奖：黄底 + 外圈光晕 + 弹一下 */
+.prize-bar[data-tone="prize"] {
+  background: linear-gradient(180deg, #FFF7D6, var(--accent-soft));
+  box-shadow: 0 4px 0 var(--ink), 0 0 0 3px rgba(255,217,61,.45);
+  animation: prizePop .46s var(--spring);
+}
+
+.prize-bar[data-tone="prize"] .prize-ico {
+  background: var(--accent);
+  border-color: var(--ink);
+}
+
+/* 半份奖（中两个）：只是浅黄，不发光 —— 别跟「三个一样」抢同一档情绪 */
+.prize-bar[data-tone="half"] {
+  background: linear-gradient(180deg, #FFFDF3, #FFF6DE);
+  animation: prizePop .4s var(--spring);
+}
+
+.prize-bar[data-tone="half"] .prize-ico {
+  background: var(--accent-soft);
+  border-color: var(--ink);
+}
+
+@keyframes prizePop {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+
+/* 大奖：整条描金 */
+.prize-bar[data-tone="legend"] {
+  background: linear-gradient(180deg, #FFF3B0, #FFD93D);
+  box-shadow: 0 4px 0 var(--ink), 0 0 0 3px rgba(255,217,61,.75), 0 0 26px rgba(255,217,61,.6);
+  animation: prizePop .5s var(--spring);
+}
+
+.prize-bar[data-tone="legend"] .prize-ico {
+  background: var(--ink);
+  color: var(--accent);
+  border-color: var(--ink);
+  animation: spinOnce .5s var(--spring);
+}
+
+@keyframes spinOnce {
+  0% { transform: rotate(-14deg) scale(.8); }
+  100% { transform: rotate(0) scale(1); }
+}
+
+/* ---------- 底部提示 / 补充券 ---------- */
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-mute);
+}
+
+kbd {
+  padding: 1px 6px 2px;
+  border: 1.5px solid var(--ink-faint);
+  border-bottom-width: 2.5px;
+  border-radius: 5px;
+  background: var(--bg-card);
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+
+.btn-text {
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-mute);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ============================================================
+   5. 礼花
+   ============================================================ */
+.fx {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti {
+  position: absolute;
+  top: 0;
+  width: 9px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--c, var(--accent));
+  opacity: 0;
+  animation: confetti 1.55s cubic-bezier(.18,.7,.3,1) forwards;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes confetti {
+  0%   { opacity: 1; transform: translate(0, -24px) rotate(0) scale(.6); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--x, 40px), var(--y, 380px)) rotate(var(--r, 240deg)) scale(var(--s, 1)); }
+}
+
+/* ============================================================
+   6. 窄屏 / 减动效
+   ============================================================ */
+@media (max-width: 359px) {
+  :root { --cell: 62px; --lever-col: 88px; }
+  .brand-title { font-size: 19px; }
+}
+
+@media (max-height: 700px) {
+  .lever { height: 176px; }
+  .app { gap: 11px; padding-top: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee i, .cab-foot .pull-tip, .dots-load i { animation: none; }
+  .machine.is-kick { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ 顶栏 ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-kicker">LUCKY DRAW</div>
+      <h1 class="brand-title">幸运老虎机</h1>
+    </div>
+
+    <div class="tickets" id="ticketsBox">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 8.6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1.1a2.35 2.35 0 0 0 0 4.6v1.1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1.1a2.35 2.35 0 0 0 0-4.6z" />
+      </svg>
+      <b id="ticketsNum">5</b><span>抽奖券</span>
+    </div>
+
+    <button class="sound-btn" id="soundBtn" aria-pressed="true" aria-label="声音开关">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z" />
+        <path d="M15.6 9a4.2 4.2 0 0 1 0 6" />
+        <path d="M18.3 6.4a7.9 7.9 0 0 1 0 11.2" />
+      </svg>
+    </button>
+  </header>
+
+  <!-- ============ 机身 ============ -->
+  <main class="stage">
+    <div class="machine" id="machine">
+      <div class="cab">
+        <div class="marquee" data-bulbs></div>
+
+        <div class="window">
+          <div class="reel" data-i="0"><div class="strip"></div></div>
+          <div class="reel" data-i="1"><div class="strip"></div></div>
+          <div class="reel" data-i="2"><div class="strip"></div></div>
+          <div class="payline" aria-hidden="true"></div>
+        </div>
+
+        <div class="marquee" data-bulbs></div>
+
+        <div class="cab-foot">
+          <span>PULL</span>
+          <span class="pull-tip">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor"
+                 stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 拉杆 ============ -->
+    <div class="lever" id="lever">
+      <svg class="lever-track" id="leverTrack" aria-hidden="true">
+        <path class="track-base" id="trackBase" />
+        <path class="track-on" id="trackOn" pathLength="1" />
+      </svg>
+
+      <div class="lever-arm" id="leverArm">
+        <div class="lever-rod"></div>
+        <div class="lever-knob" id="leverKnob" role="button" tabindex="0"
+             aria-label="向下拉动拉杆抽奖"></div>
+      </div>
+
+      <div class="lever-hinge" aria-hidden="true"></div>
+    </div>
+  </main>
+
+  <!-- ============ 奖品条 ============ -->
+  <section class="prize-bar" id="prizeBar" data-tone="idle" aria-live="polite">
+    <div class="prize-ico" id="prizeIco"></div>
+    <div class="prize-txt">
+      <b id="prizeName">拉动右侧的杆子</b>
+      <span id="prizeNote">每抽一次消耗 1 张抽奖券</span>
+    </div>
+  </section>
+
+  <footer>
+    <div class="hint">
+      <span>拖动拉杆</span>
+      <kbd>空格</kbd>
+      <span>也能抽</span>
+    </div>
+    <button class="btn-text" id="refillBtn" hidden>补充抽奖券（演示用）</button>
+  </footer>
+</div>
+
+<div class="fx" id="fx" aria-hidden="true"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ==========================================================
+     0. 小工具
+     ========================================================== */
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  /* ==========================================================
+     1. 奖品：符号即奖品
+     ----------------------------------------------------------
+     中三个 = 全额，中两个 = 半份。概率由 drawOutcome() 统一控，
+     不靠符号乱撞 —— 抽奖系统得说得清每个档多少。
+     ========================================================== */
+  const ICONS = {
+    hint: `<path d="M12 3.4a5.7 5.7 0 0 0-3.4 10.3c.6.45 1 1.1 1 1.85V16h4.8v-.45c0-.75.4-1.4 1-1.85A5.7 5.7 0 0 0 12 3.4z"/>
+           <path d="M10.2 19.2h3.6M11 21.4h2"/>`,
+    undo: `<path d="M4.2 10h9.4a5.1 5.1 0 0 1 0 10.2H8.4"/>
+           <path d="M8.4 5.5 3.9 10l4.5 4.5"/>`,
+    ticket: `<path d="M4 8.6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1.1a2.35 2.35 0 0 0 0 4.6v1.1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1.1a2.35 2.35 0 0 0 0-4.6z"/>
+             <path d="M14.2 7.6v8.8" stroke-dasharray="2 2.6"/>`,
+    crown: `<path d="M3.4 7.4l4.1 3.2L12 5l4.5 5.6 4.1-3.2-1.8 11.1H5.2z"/>
+            <path d="M7 15.6h10"/>`,
+    star: `<path d="M12 3.2l2.7 5.6 6.1.86-4.44 4.3 1.07 6.05L12 17.05l-5.43 2.96 1.07-6.05L3.2 9.66l6.1-.86z"/>`,
+    gem: `<path d="M7.2 3.6h9.6l3.9 6.1-8.7 10.9-8.7-10.9z"/>
+          <path d="M3.2 9.7h17.6M9.2 9.7 12 20.4l2.8-10.7L12 3.6z"/>`,
+    /* 只在「什么都没中」的奖品条上用，不进转轮 */
+    blank: `<circle cx="12" cy="12" r="7.4" stroke-dasharray="3.2 3.4"/>
+            <path d="M9.5 12h5"/>`,
+  };
+
+  const icon = (k, cls = "") =>
+    `<svg viewBox="0 0 24 24" class="${cls}" aria-hidden="true">${ICONS[k]}</svg>`;
+
+  const PRIZES = {
+    hint:   { full: "提示券 ×1",   half: "提示券 ×1",   note: "卡住时点一下，替你摆一颗" },
+    undo:   { full: "撤销券 ×1",   half: "撤销券 ×1",   note: "多退一步，少一步悔恨" },
+    ticket: { full: "抽奖券 ×1",   half: "抽奖券 ×1",   note: "券又自己走回来了" },
+    crown:  { full: "皇冠 ×1",     half: "皇冠碎片 ×1", note: "顶栏上能挂起来" },
+    star:   { full: "免提示卡",    half: "提示券 ×2",   note: "这一局什么时候都能看提示" },
+    gem:    { full: "钻石 ×30",    half: "钻石 ×12",    note: "收藏柜里多一串" },
+  };
+
+  const KEYS = Object.keys(PRIZES);
+  const WEIGHT = { hint: 30, undo: 26, ticket: 17, crown: 12, star: 9, gem: 6 };
+
+  function pickSymbol(exclude) {
+    const pool = KEYS.filter(k => k !== exclude);
+    let total = 0;
+    for (const k of pool) total += WEIGHT[k];
+    let r = Math.random() * total;
+    for (const k of pool) {
+      r -= WEIGHT[k];
+      if (r <= 0) return k;
+    }
+    return pool[pool.length - 1];
+  }
+
+  function pickDistinct(n) {
+    const out = [];
+    while (out.length < n) {
+      const k = pickSymbol();
+      if (!out.includes(k)) out.push(k);
+    }
+    return out;
+  }
+
+  /* 档位：三连 0.6% + 三个一样 5.4% + 两个一样 24% + 空 70%
+     ?luck=triple / pair / none / jackpot 可以钉死档位，专门用来看某一种结局 */
+  const FORCE = new URLSearchParams(location.search).get("luck");
+
+  function drawOutcome() {
+    const r = Math.random();
+    let tier;
+    if (r < 0.006) tier = "jackpot";
+    else if (r < 0.06) tier = "triple";
+    else if (r < 0.30) tier = "pair";
+    else tier = "none";
+    if (FORCE && ["jackpot", "triple", "pair", "none"].includes(FORCE)) tier = FORCE;
+
+    if (tier === "none") {
+      return { tier, reels: pickDistinct(3), prize: null };
+    }
+
+    if (tier === "pair") {
+      const s = pickSymbol();
+      const o = pickSymbol(s);
+      const arr = [s, s, o].sort(() => Math.random() - 0.5);
+      return { tier, reels: arr, prize: { key: s, half: true } };
+    }
+
+    // 三个一样：大奖只从最稀的两个里出
+    const key = tier === "jackpot" ? (Math.random() < 0.68 ? "gem" : "star") : pickSymbol();
+    return { tier, reels: [key, key, key], prize: { key, half: false } };
+  }
+
+  /* ==========================================================
+     2. 声音（全部合成，不依赖音频文件）
+     ========================================================== */
+  const state = { tickets: 5, busy: false, sound: true };
+  let ac = null;
+
+  function ctx() {
+    if (!state.sound) return null;
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ac = new AC();
+    }
+    if (ac.state === "suspended") ac.resume();
+    return ac;
+  }
+
+  function tone(o = {}) {
+    const c = ctx();
+    if (!c) return;
+    const { freq = 220, to = null, type = "sine", dur = .2, vol = .2, delay = 0 } = o;
+    const t0 = c.currentTime + delay;
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (to) osc.frequency.exponentialRampToValueAtTime(Math.max(24, to), t0 + dur);
+    g.gain.setValueAtTime(.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + .008);
+    g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+    osc.connect(g).connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + .03);
+  }
+
+  const sfx = {
+    tick:  () => tone({ freq: 1280, to: 620, type: "square", dur: .035, vol: .045 }),
+    clack: () => { tone({ freq: 320, to: 110, type: "square", dur: .07, vol: .13 });
+                   tone({ freq: 96,  to: 48,  type: "sine",   dur: .17, vol: .2 }); },
+    thunk: () => { tone({ freq: 170, to: 54, type: "sine",   dur: .2,  vol: .26 });
+                   tone({ freq: 460, to: 190, type: "square", dur: .05, vol: .07 }); },
+    nope:  () => tone({ freq: 190, to: 120, type: "square", dur: .11, vol: .09 }),
+    win:   () => [523, 659, 784, 1047].forEach((f, i) =>
+              tone({ freq: f, type: "triangle", dur: .26, vol: .15, delay: i * .085 })),
+    big:   () => [523, 659, 784, 1047, 1319].forEach((f, i) =>
+              tone({ freq: f, type: "triangle", dur: .38, vol: .16, delay: i * .085 })),
+    lose:  () => { tone({ freq: 330, to: 210, type: "sine", dur: .3, vol: .1 }); },
+    small: () => [659, 880].forEach((f, i) =>
+              tone({ freq: f, type: "triangle", dur: .2, vol: .13, delay: i * .08 })),
+  };
+
+  /* ==========================================================
+     3. 拉杆
+     ----------------------------------------------------------
+     手感靠三件事：
+       a. 指针位移 → --pull 的映射留了一点「反向缓冲」（拖过头会硬回来）
+       b. 杆子的角度走的是 --pull 的 CSS transition，回弹用带回火的贝塞尔
+       c. 松手时如果过了 0.66，杆子先「砸」到底（.1s 硬加速）再回弹
+     ========================================================== */
+  const leverEl = $("#lever");
+  const knobEl = $("#leverKnob");
+
+  const lever = {
+    pull: 0,          // 当前值（0–1，拖过头可到 1.1）
+    dragging: false,
+    startY: 0,
+    startT: 0,
+    travel: 120,
+  };
+
+  /* 只改数，怎么过渡由 .lever 上的三个类决定（is-drag / is-slam / is-free） */
+  function setPull(v) {
+    lever.pull = v;
+    leverEl.style.setProperty("--pull", v.toFixed(4));
+  }
+
+  /* 拉到底要拖多远：跟屏幕高度走，手机上一把能撸到底，桌面上不用甩太远 */
+  function travelPx() {
+    return clamp(window.innerHeight * .14, 96, 128);
+  }
+
+  function onDown(e) {
+    if (state.busy || state.tickets <= 0) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+
+    lever.dragging = true;
+    lever.startY = e.clientY;
+    lever.startT = performance.now();
+    lever.travel = travelPx();
+    leverEl.classList.add("is-drag");
+    leverEl.classList.remove("is-free", "is-slam");
+    try { knobEl.setPointerCapture(e.pointerId); } catch (_) {}
+  }
+
+  function onMove(e) {
+    if (!lever.dragging) return;
+    const dy = e.clientY - lever.startY;
+    let p;
+    if (dy <= 0) {
+      p = 0;                                  // 往上推不给动，杆子是死的
+    } else {
+      p = dy / lever.travel;
+      if (p > 1) p = 1 + (p - 1) * .22;       // 拖过头：只给一点位移，硬回来
+      p = Math.min(p, 1.1);
+    }
+    setPull(p);
+  }
+
+  function onUp(e) {
+    if (!lever.dragging) return;
+    lever.dragging = false;
+    leverEl.classList.remove("is-drag");
+
+    const dt = performance.now() - lever.startT;
+    const tapped = Math.abs((e.clientY || 0) - lever.startY) < 8 && dt < 520;
+
+    if (tapped || lever.pull >= .66) {
+      trigger();
+    } else {
+      sfx.nope();
+      springBack();
+    }
+  }
+
+  function springBack(delay = 0) {
+    leverEl.classList.remove("is-slam");
+    leverEl.classList.add("is-free");
+    setTimeout(() => {
+      lever.pull = 0;
+      leverEl.style.setProperty("--pull", "0");
+    }, delay);
+  }
+
+  /* 砸到底：先极速推到 1，等一会儿再回弹 */
+  function slam() {
+    leverEl.classList.remove("is-free");
+    leverEl.classList.add("is-slam");
+    leverEl.style.setProperty("--pull", "1");
+    lever.pull = 1;
+  }
+
+  /* 轨道弧：圆规一支脚扎在轴心上，从「收着」划到「拉到底」。
+     弧长交给 pathLength=1 归一化，CSS 那边只吃 --pull 就够了。 */
+  function layoutTrack() {
+    const arm = $("#leverArm");
+    const W = leverEl.clientWidth;
+    const H = leverEl.clientHeight;
+    const L = arm.offsetHeight || 100;
+    const R = L + 26;
+
+    const cs = getComputedStyle(document.documentElement);
+    const pivotY = parseFloat(cs.getPropertyValue("--pivot-y")) || 26;
+    const rest = parseFloat(cs.getPropertyValue("--rest")) || 13;
+    const full = parseFloat(cs.getPropertyValue("--full")) || 58;
+
+    const cx = 0;
+    const cy = H - pivotY;
+    const at = deg => {
+      const a = deg * Math.PI / 180;
+      return [cx + Math.sin(a) * R, cy - Math.cos(a) * R];
+    };
+    const [x1, y1] = at(rest);
+    const [x2, y2] = at(full);
+
+    $("#leverTrack").setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const d = `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${R} ${R} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+    $("#trackBase").setAttribute("d", d);
+    $("#trackOn").setAttribute("d", d);
+  }
+
+  /* ==========================================================
+     4. 转轮
+     ========================================================== */
+  const reels = $$(".reel").map(el => ({ el, strip: el.querySelector(".strip") }));
+
+  function buildStrip(strip, keys) {
+    strip.innerHTML = keys
+      .map(k => `<div class="sym" data-k="${k}">${icon(k)}</div>`)
+      .join("");
+  }
+
+  /* 首屏先摆一盘，省得一开机是空的。
+     摆成「每行三个都不一样」的九宫格：一是像正经转轮，二是别让中奖线
+     一开机就三条同花，看着像已经中过了。 */
+  function idleFill() {
+    const grid = [[], [], []];
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) {
+        let k, n = 0;
+        do { k = pickSymbol(); n++; }
+        while ((grid[row].includes(k) || grid[0][col] === k) && n < 24);
+        grid[row][col] = k;
+      }
+    }
+    reels.forEach((r, c) => {
+      buildStrip(r.strip, [grid[0][c], grid[1][c], grid[2][c]]);
+      r.strip.style.transform = "translateY(0px)";
+    });
+  }
+
+  /* 把 cubic-bezier 变成可以按时间取进度的小函数（打点要跟它对上） */
+  function makeEasing(x1, y1, x2, y2) {
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const sx = t => ((ax * t + bx) * t + cx) * t;
+    const sy = t => ((ay * t + by) * t + cy) * t;
+    const dx = t => (3 * ax * t + 2 * bx) * t + cx;
+    return x => {
+      let t = x;
+      for (let i = 0; i < 6; i++) {
+        const d = dx(t);
+        if (Math.abs(d) < 1e-6) break;
+        const err = sx(t) - x;
+        if (Math.abs(err) < 1e-6) break;
+        t -= err / d;
+      }
+      return sy(clamp(t, 0, 1));
+    };
+  }
+
+  const SPIN_EASE = [.15, .68, .14, 1];
+  const easeFn = makeEasing(...SPIN_EASE);
+
+  /* ---- 动态模糊只跟「此刻转得多快」有关，跟「转到了第几秒」无关 ----
+   * 原来那版是按时间线压的（58% 之后才开始收），可这条缓动在 20% 处速度就
+   * 只剩三成了 —— 于是轮子明明已经慢成爬，画面上还糊着一层，图案读不出来。
+   * 现在按每个时刻的真实速度取样：速度掉多少，模糊就掉多少。 */
+  const SPEED_H = 1e-3;
+  function spinSpeed(t) {
+    const a = easeFn(Math.max(0, t - SPEED_H));
+    const b = easeFn(Math.min(1, t + SPEED_H));
+    return (b - a) / (2 * SPEED_H);
+  }
+
+  const SPEED_MAX = (() => {
+    let m = 0;
+    for (let i = 0; i <= 100; i++) m = Math.max(m, spinSpeed(i / 100));
+    return m;
+  })();
+
+  /* 峰值线速度（px/ms）决定这一轮最多糊到什么地步：转得越久，糊得越轻 */
+  function blurKeyframes(dur, dist) {
+    const peak = SPEED_MAX * dist / dur;
+    const maxBlur = Math.min(3.2, peak * .85);
+    const N = 18;
+
+    const frames = [{ filter: "blur(0px)", offset: 0, easing: "linear" }];
+    for (let i = 1; i < N; i++) {
+      const t = i / N;
+      const v = Math.max(0, spinSpeed(t) / SPEED_MAX);
+      frames.push({ filter: `blur(${(maxBlur * v).toFixed(2)}px)`, offset: t, easing: "linear" });
+    }
+    frames.push({ filter: "blur(0px)", offset: 1 });
+    return frames;
+  }
+
+  /* 滚过一格就滴一声，间隔按缓动自己算 —— 越到后面越慢 */
+  function scheduleTicks(dur, dist, cell) {
+    let last = -1;
+    for (let k = 0; k <= 260; k++) {
+      const t = k / 260;
+      const idx = Math.floor((easeFn(t) * dist) / cell);
+      if (idx !== last) {
+        last = idx;
+        setTimeout(() => { if (state.sound) sfx.tick(); }, t * dur);
+      }
+    }
+  }
+
+  function spinReel(i, midKey, dur) {
+    const { el, strip } = reels[i];
+    const cell = el.offsetHeight / 3;
+    const N = 24;
+
+    const keys = Array.from({ length: N }, () => pickSymbol());
+    // 最后三格决定停下来时窗口里的三行（中间那行是中奖线）
+    keys[N - 4] = pickSymbol(midKey);
+    keys[N - 3] = midKey;
+    keys[N - 2] = pickSymbol(midKey);
+    buildStrip(strip, keys);
+
+    const dist = (N - 4) * cell;
+    strip.style.transform = "translateY(0px)";
+
+    const move = strip.animate(
+      [{ transform: "translateY(0px)" }, { transform: `translateY(${-dist}px)` }],
+      { duration: dur, easing: `cubic-bezier(${SPIN_EASE.join(",")})`, fill: "forwards" }
+    );
+    const blur = strip.animate(blurKeyframes(dur, dist), { duration: dur, easing: "linear" });
+
+    scheduleTicks(dur, dist, cell);
+
+    return move.finished.then(() => {
+      strip.style.transform = `translateY(${-dist}px)`;
+      move.cancel();
+      blur.cancel();
+      strip.style.filter = "";
+      el.classList.add("is-hit");
+      setTimeout(() => el.classList.remove("is-hit"), 620);
+      sfx.thunk();
+      // 停稳那一下机身顶一下
+      $("#machine").classList.remove("is-kick");
+      void $("#machine").offsetWidth;
+      $("#machine").classList.add("is-kick");
+    });
+  }
+
+  /* ==========================================================
+     5. 奖品条 / 礼花 / 券
+     ========================================================== */
+  const prizeBar = $("#prizeBar");
+  const prizeIco = $("#prizeIco");
+  const prizeName = $("#prizeName");
+  const prizeNote = $("#prizeNote");
+
+  function setPrize(tone, icoHTML, name, note) {
+    prizeBar.dataset.tone = tone;
+    // 换 key 让入场动画每次都能重放
+    prizeBar.style.animation = "none";
+    void prizeBar.offsetWidth;
+    prizeBar.style.animation = "";
+    prizeIco.innerHTML = icoHTML;
+    prizeName.textContent = name;
+    prizeNote.textContent = note;
+  }
+
+  function idlePrize() {
+    setPrize(
+      state.tickets > 0 ? "idle" : "lose",
+      icon("ticket"),
+      state.tickets > 0 ? "拉动右侧的杆子" : "抽奖券用完了",
+      state.tickets > 0 ? "每抽一次消耗 1 张抽奖券" : "补充一下再来"
+    );
+  }
+
+  const fx = $("#fx");
+  const FX_COLORS = ["#FFD93D", "#FFB03A", "#FF5C5C", "#22B573", "#FFF0B8"];
+
+  function confetti(n = 34) {
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement("div");
+      p.className = "confetti";
+      p.style.left = (4 + Math.random() * 92) + "%";
+      p.style.setProperty("--c", pick(FX_COLORS));
+      p.style.setProperty("--x", (Math.random() * 280 - 140).toFixed(0) + "px");
+      p.style.setProperty("--y", (320 + Math.random() * 320).toFixed(0) + "px");
+      p.style.setProperty("--r", (Math.random() * 900 - 450).toFixed(0) + "deg");
+      p.style.setProperty("--d", (Math.random() * 260).toFixed(0) + "ms");
+      p.style.setProperty("--s", (.7 + Math.random() * .45).toFixed(2));
+      if (Math.random() < .34) p.style.borderRadius = "50%";
+      fx.appendChild(p);
+      setTimeout(() => p.remove(), 2100);
+    }
+  }
+
+  const ticketsNum = $("#ticketsNum");
+  const ticketsBox = $("#ticketsBox");
+  const refillBtn = $("#refillBtn");
+
+  function renderTickets() {
+    ticketsNum.textContent = state.tickets;
+    ticketsBox.classList.toggle("is-empty", state.tickets <= 0);
+    // 杆子等这一轮转完再变灰：抽最后一张时球在半空就死掉会很怪
+    leverEl.classList.toggle("is-empty", state.tickets <= 0 && !state.busy);
+    refillBtn.hidden = state.tickets > 0;
+  }
+
+  /* ==========================================================
+     6. 一次完整的抽奖
+     ========================================================== */
+  async function trigger() {
+    if (state.busy) return;
+    if (state.tickets <= 0) { sfx.nope(); return; }
+
+    state.busy = true;
+    state.tickets--;
+    renderTickets();
+    document.body.classList.add("is-spinning");
+
+    setPrize("spinning", `<div class="dots-load"><i></i><i></i><i></i></div>`, "转动中…", "别急，让它停稳");
+    slam();
+
+    const out = drawOutcome();
+
+    await wait(110);
+    $("#machine").classList.remove("is-kick");
+    void $("#machine").offsetWidth;
+    $("#machine").classList.add("is-kick");
+    sfx.clack();
+    springBack();       // 杆子回弹交给 --pull 的 transition
+
+    /* 三轮停下的间隔就是悬念的长度：一停 → 二停 → 三停之间各留半秒多，
+       前两轮停完那一段安静的等待，比一口气全停要吊人 */
+    const durs = [1080, 1620, 2160];
+    if (out.tier !== "none") durs[2] += 420;   // 有戏的时候第三轮再多吊一会儿
+
+    await Promise.all(reels.map((_, i) => spinReel(i, out.reels[i], durs[i])));
+
+    resolve(out);
+
+    state.busy = false;
+    document.body.classList.remove("is-spinning");
+    renderTickets();
+
+    // 最后一张：结果先留 1.8 秒给人看清，再换成「券用完了」（不然「再拉一次」很打脸）
+    if (state.tickets === 0) {
+      setTimeout(() => { if (!state.busy && state.tickets === 0) idlePrize(); }, 1800);
+    }
+  }
+
+  function resolve(out) {
+    if (!out.prize) {
+      sfx.lose();
+      setPrize("lose", icon("blank"), "谢谢参与", "三个都不重样，再拉一次");
+      return;
+    }
+
+    const p = PRIZES[out.prize.key];
+    const name = out.prize.half ? p.half : p.full;
+    const note = out.prize.half ? "两个一样 · 半份奖" : "三个一样！";
+
+    if (out.tier === "jackpot") {
+      sfx.big();
+      confetti(70);
+      setPrize("legend", icon(out.prize.key), name, note + " · 传说档");
+    } else if (out.tier === "triple") {
+      sfx.win();
+      confetti(48);
+      setPrize("prize", icon(out.prize.key), name, note);
+    } else {
+      sfx.small();
+      setPrize("half", icon(out.prize.key), name, note);
+    }
+  }
+
+  /* ==========================================================
+     7. 绑定
+     ========================================================== */
+  knobEl.addEventListener("pointerdown", onDown);
+  window.addEventListener("pointermove", onMove, { passive: true });
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+
+  knobEl.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); trigger(); }
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.code !== "Space") return;
+    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+    e.preventDefault();
+    trigger();
+  });
+
+  $("#soundBtn").addEventListener("click", e => {
+    state.sound = !state.sound;
+    e.currentTarget.setAttribute("aria-pressed", String(state.sound));
+    if (state.sound) sfx.tick();
+  });
+
+  refillBtn.addEventListener("click", () => {
+    state.tickets = 5;
+    renderTickets();
+    idlePrize();
+  });
+
+  let rt = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => { layoutTrack(); idleFill(); }, 140);
+  });
+
+  /* ==========================================================
+     8. 起步
+     ========================================================== */
+  // 跑马灯的灯泡
+  $$("[data-bulbs]").forEach(row => {
+    row.innerHTML = Array.from({ length: 13 }, (_, i) => `<i style="--i:${i}"></i>`).join("");
+  });
+
+  layoutTrack();
+  idleFill();
+  renderTickets();
+  idlePrize();
+  // 字体到位后再排一次点，免得量到 0 高度
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layoutTrack);
+})();
+</script>
+</body>
+</html>
