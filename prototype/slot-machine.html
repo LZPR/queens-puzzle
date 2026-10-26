@@ -893,7 +893,7 @@ kbd {
   }
 
   /* 档位：三连 0.6% + 三个一样 5.4% + 两个一样 24% + 空 70%
-     ?luck=triple / pair / none / jackpot 可以钉死档位，专门用来看某一种结局 */
+     ?luck=triple / pair / none / jackpot / nearmiss 可以钉死档位，专门用来看某一种结局 */
   const FORCE = new URLSearchParams(location.search).get("luck");
 
   function drawOutcome() {
@@ -903,22 +903,27 @@ kbd {
     else if (r < 0.06) tier = "triple";
     else if (r < 0.30) tier = "pair";
     else tier = "none";
-    if (FORCE && ["jackpot", "triple", "pair", "none"].includes(FORCE)) tier = FORCE;
+    if (FORCE && ["jackpot", "triple", "pair", "none", "nearmiss"].includes(FORCE)) {
+      tier = FORCE === "nearmiss" ? "pair" : FORCE;
+    }
 
     if (tier === "none") {
-      return { tier, reels: pickDistinct(3), prize: null };
+      return { tier, reels: pickDistinct(3), prize: null, nearMiss: false };
     }
 
     if (tier === "pair") {
       const s = pickSymbol();
       const o = pickSymbol(s);
-      const arr = [s, s, o].sort(() => Math.random() - 0.5);
-      return { tier, reels: arr, prize: { key: s, half: true } };
+      // nearmiss 调试档：把「不一样的那个」固定放在最后一轮
+      const arr = FORCE === "nearmiss" ? [s, s, o] : [s, s, o].sort(() => Math.random() - 0.5);
+      /* 差一点就中 = 前两轮撞上了、最后一轮没跟上 —— 只有这种才配走那轮「磨蹭」。
+         大约 8% 的抽奖会撞上（24% 的对子 × 1/3 的概率让落单的在最后）。 */
+      return { tier, reels: arr, prize: { key: s, half: true }, nearMiss: arr[2] !== arr[1] };
     }
 
     // 三个一样：大奖只从最稀的两个里出
     const key = tier === "jackpot" ? (Math.random() < 0.68 ? "gem" : "star") : pickSymbol();
-    return { tier, reels: [key, key, key], prize: { key, half: false } };
+    return { tier, reels: [key, key, key], prize: { key, half: false }, nearMiss: false };
   }
 
   /* ==========================================================
@@ -1145,45 +1150,110 @@ kbd {
   const SPIN_EASE = [.15, .68, .14, 1];
   const easeFn = makeEasing(...SPIN_EASE);
 
+  /* ---- 两条曲线：普通轮子一条缓动；「差一点就中」那轮改用速度剖面反推 ----
+   * 为什么不能只拉长缓动：那条缓动的尾巴是**渐近归零**的，拉长之后大部分时间
+   * 速度都在 0.02px/ms 以下，看着就是卡住了，不是「慢慢滚」。
+   *
+   * 所以近失那轮先把**速度**定好，再积分成位移：
+   *     0 → 1000ms   正常起速，然后减到约 1 格/秒
+   *  1000 → 2000ms   就按这个速度滚 1 秒（正好滚满最后一格）
+   *  2000 → 2400ms   轻轻收住
+   * （距离多给一格：慢滚这一秒走过的就是那多出来的一格，速度才真是 1 格/秒。
+   *   只加时长不给距离，等于把曲线横向拉伸，慢滚只会更慢、更看不出在动。）
+   * 速度剖面处处连续：既没有归零的平台，也没有第二次加速 —— 它一路上都在动。 */
+  const SPEED_H = 1e-3;
+  function deriv(f, t) {
+    return (f(Math.min(1, t + SPEED_H)) - f(Math.max(0, t - SPEED_H))) / (2 * SPEED_H);
+  }
+
+  const SPIN_VMAX = (() => {
+    let m = 0;
+    for (let i = 0; i <= 200; i++) m = Math.max(m, deriv(easeFn, i / 200));
+    return m;
+  })();
+
+  const CURVE_EASE = { at: easeFn, vmax: SPIN_VMAX };
+
+  const ROLL_DECEL = 1000;      // 减速到「慢滚速度」用多久
+  const ROLL_END = 2000;        // 慢滚到这儿结束（1000→2000 正好滚 1 秒）
+  const ROLL_RATIO = .0254;     // 慢滚速度 / 起速峰值 ≈ 1 格每秒
+
+  function makeRollCurve(dist, dur) {
+    const N = 300;
+    const t1 = Math.min(ROLL_DECEL, dur * .5);
+    const t2 = Math.min(ROLL_END, dur - 300);
+
+    // 速度剖面（峰值归一成 1）
+    const shape = t => {
+      if (t < t1) return ROLL_RATIO + (1 - ROLL_RATIO) * Math.pow(1 - t / t1, 1.2);
+      if (t < t2) return ROLL_RATIO;
+      return ROLL_RATIO * Math.pow(1 - (t - t2) / (dur - t2), 2);
+    };
+
+    // 梯形法积出位移，再按总距离归一化（顺带定出真实峰值速度）
+    const pos = [];
+    let acc = 0;
+    for (let i = 0; i <= N; i++) {
+      if (i > 0) {
+        const a = shape(dur * (i - 1) / N);
+        const b = shape(dur * i / N);
+        acc += (a + b) / 2 * (dur / N);
+      }
+      pos.push(acc);
+    }
+    const k = dist / acc;
+    for (let i = 0; i <= N; i++) pos[i] *= k;
+
+    const at = t => {
+      const x = clamp(t, 0, 1) * N;
+      const i = Math.min(N - 1, Math.floor(x));
+      return (pos[i] + (pos[i + 1] - pos[i]) * (x - i)) / dist;
+    };
+
+    let vmax = 0;
+    for (let i = 0; i <= 200; i++) vmax = Math.max(vmax, deriv(at, i / 200));
+    return { at, vmax };
+  }
+
+  /* 位移键帧（曲线不是单一 cubic-bezier，只能逐点给） */
+  function moveKeyframes(curve, dist, N = 120) {
+    const frames = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      frames.push({
+        transform: `translateY(${(-curve.at(t) * dist).toFixed(2)}px)`,
+        offset: t,
+        easing: "linear",
+      });
+    }
+    return frames;
+  }
+
   /* ---- 动态模糊只跟「此刻转得多快」有关，跟「转到了第几秒」无关 ----
    * 原来那版是按时间线压的（58% 之后才开始收），可这条缓动在 20% 处速度就
    * 只剩三成了 —— 于是轮子明明已经慢成爬，画面上还糊着一层，图案读不出来。
    * 现在按每个时刻的真实速度取样：速度掉多少，模糊就掉多少。 */
-  const SPEED_H = 1e-3;
-  function spinSpeed(t) {
-    const a = easeFn(Math.max(0, t - SPEED_H));
-    const b = easeFn(Math.min(1, t + SPEED_H));
-    return (b - a) / (2 * SPEED_H);
-  }
-
-  const SPEED_MAX = (() => {
-    let m = 0;
-    for (let i = 0; i <= 100; i++) m = Math.max(m, spinSpeed(i / 100));
-    return m;
-  })();
-
-  /* 峰值线速度（px/ms）决定这一轮最多糊到什么地步：转得越久，糊得越轻 */
-  function blurKeyframes(dur, dist) {
-    const peak = SPEED_MAX * dist / dur;
+  function blurKeyframes(curve, dur, dist) {
+    const peak = curve.vmax * dist / dur;
     const maxBlur = Math.min(3.2, peak * .85);
-    const N = 18;
+    const N = 24;
 
     const frames = [{ filter: "blur(0px)", offset: 0, easing: "linear" }];
     for (let i = 1; i < N; i++) {
       const t = i / N;
-      const v = Math.max(0, spinSpeed(t) / SPEED_MAX);
+      const v = Math.max(0, deriv(curve.at, t) / curve.vmax);
       frames.push({ filter: `blur(${(maxBlur * v).toFixed(2)}px)`, offset: t, easing: "linear" });
     }
     frames.push({ filter: "blur(0px)", offset: 1 });
     return frames;
   }
 
-  /* 滚过一格就滴一声，间隔按缓动自己算 —— 越到后面越慢 */
-  function scheduleTicks(dur, dist, cell) {
+  /* 滚过一格就滴一声，间隔按同一条曲线算 —— 越到后面越稀 */
+  function scheduleTicks(curve, dur, dist, cell) {
     let last = -1;
-    for (let k = 0; k <= 260; k++) {
-      const t = k / 260;
-      const idx = Math.floor((easeFn(t) * dist) / cell);
+    for (let k = 0; k <= 400; k++) {
+      const t = k / 400;
+      const idx = Math.floor((curve.at(t) * dist) / cell);
       if (idx !== last) {
         last = idx;
         setTimeout(() => { if (state.sound) sfx.tick(); }, t * dur);
@@ -1191,28 +1261,38 @@ kbd {
     }
   }
 
-  function spinReel(i, midKey, dur) {
+  function spinReel(i, midKey, dur, slow) {
     const { el, strip } = reels[i];
     const cell = el.offsetHeight / 3;
     const N = 24;
 
     const keys = Array.from({ length: N }, () => pickSymbol());
-    // 最后三格决定停下来时窗口里的三行（中间那行是中奖线）
-    keys[N - 4] = pickSymbol(midKey);
-    keys[N - 3] = midKey;
-    keys[N - 2] = pickSymbol(midKey);
+    // 近失那轮多滑一格：慢滚要「多滚 1 秒」，距离就得跟着多一格，
+    // 否则只加时长等于把曲线横向拉伸，慢滚反而更慢。落点内容是同一套。
+    const stop = slow ? N - 3 : N - 4;
+    // 停下时窗口里的三行（stop 是窗口第一行，中间那行是中奖线）
+    keys[stop] = pickSymbol(midKey);
+    keys[stop + 1] = midKey;
+    keys[stop + 2] = pickSymbol(midKey);
     buildStrip(strip, keys);
 
-    const dist = (N - 4) * cell;
+    const dist = stop * cell;
     strip.style.transform = "translateY(0px)";
 
-    const move = strip.animate(
-      [{ transform: "translateY(0px)" }, { transform: `translateY(${-dist}px)` }],
-      { duration: dur, easing: `cubic-bezier(${SPIN_EASE.join(",")})`, fill: "forwards" }
-    );
-    const blur = strip.animate(blurKeyframes(dur, dist), { duration: dur, easing: "linear" });
+    const curve = slow ? makeRollCurve(dist, dur) : CURVE_EASE;
 
-    scheduleTicks(dur, dist, cell);
+    const move = strip.animate(
+      slow ? moveKeyframes(curve, dist)
+           : [{ transform: "translateY(0px)" }, { transform: `translateY(${-dist}px)` }],
+      {
+        duration: dur,
+        easing: slow ? "linear" : `cubic-bezier(${SPIN_EASE.join(",")})`,
+        fill: "forwards",
+      }
+    );
+    const blur = strip.animate(blurKeyframes(curve, dur, dist), { duration: dur, easing: "linear" });
+
+    scheduleTicks(curve, dur, dist, cell);
 
     return move.finished.then(() => {
       strip.style.transform = `translateY(${-dist}px)`;
@@ -1313,12 +1393,13 @@ kbd {
     sfx.clack();
     springBack();       // 杆子回弹交给 --pull 的 transition
 
-    /* 三轮停下的间隔就是悬念的长度：一停 → 二停 → 三停之间各留半秒多，
-       前两轮停完那一段安静的等待，比一口气全停要吊人 */
-    const durs = [1080, 1620, 2160];
-    if (out.tier !== "none") durs[2] += 420;   // 有戏的时候第三轮再多吊一会儿
+    /* 三轮停下的间隔就是悬念的长度：一停 → 二停 → 三停之间各留半秒多。
+       最后一轮遇到「差一点就中」时整体拉长到 3.3 秒 —— 不是加个停顿，
+       是把整条减速一起拉软，所以它一路上都还在动，只是不肯停。 */
+    // 最后一轮跟普通局同长：近失那轮不靠「更多地等」，靠那 1 秒匀速慢滚
+    const durs = [1080, 1620, 2400];
 
-    await Promise.all(reels.map((_, i) => spinReel(i, out.reels[i], durs[i])));
+    await Promise.all(reels.map((_, i) => spinReel(i, out.reels[i], durs[i], i === 2 && out.nearMiss)));
 
     resolve(out);
 
