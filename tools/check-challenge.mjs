@@ -18,11 +18,15 @@
  *      重试归零、刷新后步数还在
  * ========================================================================== */
 import { createRequire } from 'node:module';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 const require = createRequire('C:/Users/CJL/.workbuddy/binaries/node/workspace/');
 const puppeteer = require('puppeteer-core');
 
 const URL = process.env.QURL || 'http://127.0.0.1:8080/';
-const SHOTS = 'E:/Projects/Games/queens-puzzle/tools/shots/';
+const SHOTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'shots') + path.sep;
+mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 let pass = 0, fail = 0;
@@ -135,7 +139,7 @@ console.log('\n--- 1. 面板结构：挑战在「换一局」上面 ---');
 await openSheet();
 let ui = await sheetUi();
 ok('挑战组在「换一局」之上', ui.aboveShuffle);
-ok('限时挡位 5 个且首个是「不限」', ui.labels.length === 5 && ui.labels[0] === '不限', ui.labels);
+ok('限时挡位 6 个且首个是「不限」', ui.labels.length === 6 && ui.labels[0] === '不限', ui.labels);
 ok('默认选中「不限」', ui.on.length === 1 && ui.on[0] === '不限', ui.on);
 ok('步数限制挡位 5 个且首个是「不限」',
   ui.stepLabels.length === 5 && ui.stepLabels[0] === '不限', ui.stepLabels);

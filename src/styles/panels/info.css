@@ -49,6 +49,7 @@
 
 .info-level[data-tone="easy"] { color: #17804F; }
 .info-level[data-tone="mid"] { color: #A97600; }
+.info-level[data-tone="advanced"] { color: #A35C00; }
 .info-level[data-tone="hard"] { color: #C9560F; }
 .info-level[data-tone="extreme"] { color: #C22F2F; }
 

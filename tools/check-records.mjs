@@ -3,12 +3,15 @@
 // 覆盖：记录写入、棋盘缩略图、分享码、复制、排行榜分组、超时记账、删除 / 清空、刷新后仍在
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 const require = createRequire('C:/Users/CJL/.workbuddy/binaries/node/workspace/');
 const puppeteer = require('puppeteer-core');
 
 const URL = process.argv[2] || 'http://127.0.0.1:8080/';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const OUT = 'E:/Projects/Games/queens-puzzle/tools/shots';
+/* 截图目录跟着脚本走：仓库搬过家，写死绝对路径会在新机器上直接建不出来 */
+const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'shots');
 mkdirSync(OUT, { recursive: true });
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -234,7 +237,7 @@ r = await page.evaluate(() => ({
   lvl: __QUEENS_DEBUG__.state.vibe.level,
   medal: (document.querySelector('#boardList .lb-row') || {}).dataset ? document.querySelector('#boardList .lb-row').dataset.medal : ''
 }));
-check('限时 5 挡 + 难度 4 挡', r.lims === 5 && r.lvs === 4, `lim=${r.lims} lv=${r.lvs}`);
+check('限时 6 挡 + 难度 5 挡', r.lims === 6 && r.lvs === 5, `lim=${r.lims} lv=${r.lvs}`);
 /* 8×8 在 v2 刻度下大多数是中等，但也有少量容易/困难 —— 所以「默认落在哪一档」
  * 跟着这一局的真实档位走，别写死「中等」。 */
 check('默认落在这局自己的「限时 + 难度」组',
@@ -286,7 +289,7 @@ await openRecords();
 await openTab('board');
 r = await page.evaluate(() => {
   /* 两局的档位不一定相同（8×8 偶尔会落在容易/困难），所以按限时把四个难度加起来数 */
-  const tones = ['easy', 'mid', 'hard', 'extreme'];
+  const tones = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
   const count = (ms) => {
     document.querySelector('#limChips [data-lim="' + ms + '"]').click();
     let total = 0;
@@ -337,7 +340,7 @@ check('记录列表标出未完成', r.rows === 3 && r.lost === 1 && r.badge ===
 
 await openTab('board');
 r = await page.evaluate(() => {
-  const tones = ['easy', 'mid', 'hard', 'extreme'];
+  const tones = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
   document.querySelector('#limChips [data-lim="0"]').click();
   let total = 0;
   for (const t of tones) {
@@ -405,21 +408,21 @@ r = await page.evaluate(() => ({
 check('顶栏没被挤出去', r.topbar && r.overflow <= 0, JSON.stringify(r));
 
 /* ---------- 12. 一批记录：分页 + 榜单排序 ---------- */
-// 造 25 条：难度按 easy→extreme 轮转、限时按 0/3/5 分钟轮转、每 5 条有一条未完成，
+// 造 25 条：难度按 easy→极难五挡轮转、限时按 0/3/5 分钟轮转、每 7 条有一条未完成，
 // 用时随序号递减（越靠后越快），这样排序对不对一眼就能看出来。
 await page.evaluate(() => {
   const d = __QUEENS_DEBUG__, n = d.state.size;
   const hex = (v) => '0123456789ABCDEF'[v];
   const rg = Array.from(d.state.regions).map(hex).join('');
   const so = Array.from(d.state.solution).map(hex).join('');
-  const lvs = ['easy', 'mid', 'hard', 'extreme'];
+  const lvs = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
   const lims = [0, 180000, 300000];
   const out = [];
   for (let i = 0; i < 25; i++) {
     out.push({
       v: 1, id: 'seed' + i, at: Date.now() - i * 86400000, n: n, sd: 1, rg: rg, so: so,
-      lv: lvs[i % 4], sc: 3 + (i % 7), sq: 2, lim: lims[i % 3], ms: 200000 - i * 3000,
-      h: i % 3, mv: 20 + i, won: i % 5 !== 0, nh: false, nu: false
+      lv: lvs[i % 5], sc: 3 + (i % 7), sq: 3, lim: lims[i % 3], ms: 200000 - i * 3000,
+      h: i % 3, mv: 20 + i, won: i % 7 !== 3, nh: false, nu: false
     });
   }
   localStorage.setItem('queens.records.v1', JSON.stringify(out));
@@ -490,15 +493,15 @@ r = await page.evaluate(() => {
     chip: document.querySelector('#limChips [data-lim="0"]').textContent.trim()
   };
 });
-// 不限时 + 容易：种子数据里 i=12 / i=24 两条，用时 200000-36000 / 200000-72000
+// 不限时 + 容易：种子数据里 i=0 / i=15 两条，用时 200000-0 / 200000-45000
 check('按要求分组（不限时 + 容易 2 条）', r.n === 2, `n=${r.n} ${r.times.join(',')}`);
-check('按用时从快到慢', r.times[0] === '02:08' && r.times[1] === '02:44', r.times.join(' > '));
+check('按用时从快到慢', r.times[0] === '02:35' && r.times[1] === '03:20', r.times.join(' > '));
 check('名次与奖牌', r.ranks.join(',') === '1,2' && r.medals.join(',') === '1,2', `${r.ranks} ${r.medals}`);
 check('限时角标跟着换难度重算', r.chip.endsWith('2'), r.chip);
 await page.screenshot({ path: `${OUT}/records-board-many.png` });
 
 /* ---------- 13. 旧刻度的记录：留在列表里，但不进排行榜 ---------- */
-// 刻度换成 v2 之后，老记录的 lv / sc 是按旧尺子量的（13×13 那时算极难），
+// 刻度换成 v3 之后，老记录的 lv / sc 是按旧尺子量的（14×14 那时算极难、分数截在 9.9），
 // 不能和新成绩放一张榜上比。老记录没有 sq 字段，正好用来验证这一点。
 await page.evaluate(() => {
   const arr = JSON.parse(localStorage.getItem('queens.records.v1') || '[]');

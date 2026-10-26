@@ -8,12 +8,15 @@
  * ========================================================================== */
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 const require = createRequire('C:/Users/CJL/.workbuddy/binaries/node/workspace/');
 const puppeteer = require('puppeteer-core');
 
 const URL = process.argv[2] || 'http://127.0.0.1:8080/';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const OUT = 'E:/Projects/Games/queens-puzzle/tools/shots';
+/* 截图目录跟着脚本走：仓库搬过家，写死绝对路径会在新机器上直接建不出来 */
+const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'shots');
 mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -110,7 +113,7 @@ const ng = await page.evaluate(() => {
 });
 check('顶栏「新一局」打开的是换一局面板', ng.open);
 check('尺寸 / 难度 / 挑战都在这一层',
-  ng.stepper && ng.quick >= 5 && ng.diff === 5 && ng.limit === 5 && ng.step === 5 && ng.challengeSw === 3,
+  ng.stepper && ng.quick >= 5 && ng.diff === 6 && ng.limit === 6 && ng.step === 5 && ng.challengeSw === 3,
   ng);
 check('「换一局」在挑战组的下面', ng.shuffleAfterChallenge === true);
 check('换一局面板里没有分享', ng.share === false);

@@ -430,7 +430,7 @@
     };
   }
 
-  /* ------------------------------------------------------ 人类视角分 v2
+  /* ------------------------------------------------------ 人类视角分 v3
    * 旧刻度（下面的旧实现在 git 历史里）本质是「尺寸的另一种写法」：
    * 与尺寸的相关 0.99，与「人到底试推了几次」只有 0.38。实测 13×13 里既有
    * 纯逻辑推完的盘，也有要试推一百多次的盘；16×16 也有开局就能推完的。
@@ -441,19 +441,24 @@
    *   probes  试推次数 —— 人做了多少次「假设 → 矛盾」
    *   open    开局纯逻辑推进率 = l3Steps / n —— 0 表示第一只就得假设
    *
-   * 分数 = 尺寸基线 + 试推深度（对数饱和）+ 开局卡壳，落在 1.0–9.9。
+   * v3 只改两处（见 docs/难度系统v3-无限分绝对阈值-实施计划.md）：
+   *   1) 试推深度的指数 0.75 → 0.90：原来的 0.75 次幂在高试推段饱和得太早，
+   *      9.0–9.9 挤成一团，真实差距拉不开；
+   *   2) 取消 9.9 的硬上限：16×16 的深盘能到 12.4，截断之后它们全都一样。
+   * 分数 = 尺寸基线 + 试推深度 + 开局卡壳，下限仍为 1.0，**没有上限**。
    * 跨尺寸不再严格单调（13×13 的中位分可能低于 12×12），这是实测事实：
    * 13×13 的难度分布比 16×16 还宽，强行单调只会把小盘里的硬盘压平。
    */
   var LEVELS = [
     { level: '容易', tone: 'easy' },
     { level: '中等', tone: 'mid' },
+    { level: '较难', tone: 'advanced' },
     { level: '困难', tone: 'hard' },
     { level: '极难', tone: 'extreme' }
   ];
 
   var LN2 = Math.LN2;
-  var SCALE_VERSION = 2;
+  var SCALE_VERSION = 3;
 
   /* 三个分量：base 尺寸基线、depth 试推深度、stuck 开局卡壳。
    * w 是「大盘上一次试推更费眼」的权重（0.78 → 1.00）。 */
@@ -462,7 +467,7 @@
     var s = Math.log(n / 2.5) / LN2;                 // 4→0.68 … 16→2.68
     var base = 1.0 + 1.5 * s;                        // 尺寸基线 2.0 … 5.0
     var w = 0.70 + 0.30 * (s / 2.678);
-    var depth = Math.pow(Math.log(1 + (m.probes || 0)) / LN2, 0.75);   // 饱和
+    var depth = Math.pow(Math.log(1 + (m.probes || 0)) / LN2, 0.90);   // 饱和得晚一些
     var open = n ? Math.min(1, (m.l3Steps || 0) / n) : 0;
     var probePart = 0.90 * depth * w;
     var stuckPart = 0.70 * (1 - open);
@@ -478,21 +483,27 @@
     };
   }
 
+  /* 只保下限与一位小数：上限没有了（16×16 的深盘能到 12 出头）。 */
   function scale(n, m) {
     var f = scaleFields(n, m);
-    return Math.round(Math.max(1, Math.min(9.9, f.value)) * 10) / 10;
+    return Math.round(Math.max(1, f.value) * 10) / 10;
   }
 
-  /* 分级阈值：5.5 → 8×8 以下几乎全部在下面；7.0 → 10×10 起才稳定达到；
-   * 8.4 → 只有 12×12 以上能到（13–16 的盘里约 18%）。 */
+  /* 分级阈值（绝对分，不跟分布走）：
+   *   6.0  → 5×5 以下几乎全部在下面；
+   *   7.0  → 9×9 起才稳定达到（旧的「困难」从这里开始）；
+   *   10.0 → 旧的 9.0 上下，只有 12×12 以上的深盘够得到；
+   *   11.3 → 旧的 9.8 上下，只有 16×16 最深的那些盘。
+   * 四舍五入正好落在阈值上的盘归下一档（开区间的下界），不会出现空档或重叠。 */
   function levelOf(v) {
-    if (v < 5.5) return LEVELS[0];
+    if (v < 6.0) return LEVELS[0];
     if (v < 7.0) return LEVELS[1];
-    if (v < 8.4) return LEVELS[2];
-    return LEVELS[3];
+    if (v < 10.0) return LEVELS[2];
+    if (v < 11.3) return LEVELS[3];
+    return LEVELS[4];
   }
 
-  /* 1.0–9.9 的体感分 + 档位。旧签名多出来的 tier/extra 一律忽略：
+  /* 体感分 + 档位（分数可能超过 10）。旧签名多出来的 tier/extra 一律忽略：
    * 分数已经不看 tier 了，留着参数只是为了不惊动老工具。 */
   function display(n, m) {
     var v = scale(n, m);
@@ -701,7 +712,7 @@
   }
 
   return {
-    version: '2.0.0',
+    version: '3.0.0',
     analyze: analyze,
     score: score,
     rate: rate,

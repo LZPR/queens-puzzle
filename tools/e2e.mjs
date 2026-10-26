@@ -3,12 +3,15 @@
 // 配套: node tools/check-diffpick.mjs（目标难度出题 / 尺寸锁定 / 加载遮罩，45 项）
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 const require = createRequire('C:/Users/CJL/.workbuddy/binaries/node/workspace/');
 const puppeteer = require('puppeteer-core');
 
 const URL = process.argv[2] || 'http://127.0.0.1:8080/';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const OUT = 'E:/Projects/Games/queens-puzzle/tools/shots';
+/* 截图目录跟着脚本走：仓库搬过家，写死绝对路径会在新机器上直接建不出来 */
+const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'shots');
 mkdirSync(OUT, { recursive: true });
 
 const log = (...a) => console.log(...a);
@@ -593,7 +596,7 @@ const newUi = await page.evaluate(() => {
 check('换一局面板从顶栏打开', newUi.open, `inView=${newUi.inView}`);
 check('换一局面板完整可见', newUi.inView);
 check('换一局面板有快捷尺寸', newUi.quick >= 5, `quick=${newUi.quick}`);
-check('换一局面板带着挑战挡位', newUi.limit === 5 && newUi.step === 5, `${newUi.limit}/${newUi.step}`);
+check('换一局面板带着挑战挡位', newUi.limit === 6 && newUi.step === 5, `${newUi.limit}/${newUi.step}`);
 check('换一局面板底部是「换一局」且没有分享', newUi.shuffle && !newUi.share);
 await page.screenshot({ path: `${OUT}/06b-newgame.png` });
 
@@ -958,8 +961,8 @@ const chip = await page.evaluate(() => {
   };
 });
 check('信息条难度段可见', !chip.hidden && chip.inHud);
-check('难度段文案是常见分级', /^(容易|中等|困难|极难)$/.test(chip.level), chip.level);
-check('难度段分数一位小数', /^\d(\.\d)?$/.test(chip.score), chip.score);
+check('难度段文案是常见分级', /^(容易|中等|较难|困难|极难)$/.test(chip.level), chip.level);
+check('难度段分数一位小数（可能两位整数）', /^\d{1,2}\.\d$/.test(chip.score), chip.score);
 check('难度段与模型一致', chip.level === chip.vibe.level && chip.score === chip.vibe.score.toFixed(1));
 check('信息条不压到棋盘', chip.chipBottom <= chip.boardTop + 1,
   `hud=${Math.round(chip.chipBottom)} board=${Math.round(chip.boardTop)}`);
@@ -1128,7 +1131,7 @@ for (const n of [4, 8, 16]) {
   ladders.push(await page.evaluate(() => __QUEENS_DEBUG__.state.vibe.score));
 }
 check('大盘整体更难（16×16 比 4×4 高 1.5 分以上）', ladders[2] - ladders[0] >= 1.5, ladders.join(' / '));
-check('分数都在 1.0–9.9', ladders.every(v => v >= 1 && v <= 9.9), ladders.join(' / '));
+check('分数在 1.0 以上、没有 9.9 上限', ladders.every(v => v >= 1 && v < 14), ladders.join(' / '));
 
 // 4×4 物理上不可能难；16×16 偶尔会抽到特别顺的盘（约 3% 是中等），所以抽三次看两次
 const smallTone = await page.evaluate(() => {
@@ -1144,7 +1147,8 @@ for (let i = 0; i < 3; i++) {
     { timeout: 40000 }, prevSeed);
   bigTones.push(await page.evaluate(() => __QUEENS_DEBUG__.state.vibe.level));
 }
-check('16×16 基本落在困难/极难', bigTones.filter(t => t === '困难' || t === '极难').length >= 2, bigTones.join(' '));
+check('16×16 大多落在较难以上',
+  bigTones.filter(t => t === '较难' || t === '困难' || t === '极难').length >= 2, bigTones.join(' '));
 
 // 续玩（从存档恢复）也要有难度：新开一页会走 loadGame 分支
 await sleep(500);   // 等 save() 的 160ms 防抖落地

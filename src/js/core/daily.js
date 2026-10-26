@@ -6,14 +6,14 @@
  * 按「日期 + 档位 + 第几次尝试」算种子生成，不用 Math.random。
  * 到了第二天日期变了，种子自然换一批，也就是「到第二天重置」。
  *
- * 这一层只管数据：日期键、四挡的规矩、完成记录（localStorage）。不碰 DOM、
+ * 这一层只管数据：日期键、五挡的规矩、完成记录（localStorage）。不碰 DOM、
  * 不碰引擎。棋盘怎么出在 app/daily.js，面板怎么画在 ui/panels/ 里。
  *
- * 四挡的规矩（玩家改不了，见 requirement）：
+ * 五挡的规矩（玩家改不了，见 requirement）：
  *   棋盘 = 这一挡能开的最大盘（借 DIFF_BANDS 的 hi，别另写一份尺寸）
- *   限时 = 3 / 5 / 10 / 20 分钟
+ *   限时 = 3 / 5 / 10 / 15 / 20 分钟
  *   步数不限 · 禁用提示 · 可以撤销 · 禁用记录点 · 标错扣 3 条命
- *   完成任意一挡就算完成今日挑战（四挡是同一天里可选的四个尺寸，不是四道关卡）；
+ *   完成任意一挡就算完成今日挑战（五挡是同一天里可选的五个尺寸，不是五道关卡）；
  *   解锁链照旧，完成前一挡才开下一挡。
  *
  * 解锁：只有完成了前一挡，才解锁下一挡（容易永远开着）。
@@ -21,14 +21,14 @@
 
 import { DIFF_BANDS, STORE_DAILY } from './config.js';
 
-/** 四挡，顺序就是解锁顺序。跟 DIFF_BANDS 的键是同一套。 */
-export var DAILY_TIERS = ['easy', 'mid', 'hard', 'extreme'];
+/** 五挡，顺序就是解锁顺序。跟 DIFF_BANDS 的键是同一套（难度 v3 起多了「较难」）。 */
+export var DAILY_TIERS = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
 
 /** 每日挑战写死的命数：标错惩罚固定 3 条。 */
 export var DAILY_LIVES = 3;
 
-/* 每挡多久：容易到极难 3 → 20 分钟，正好把 LIMIT_OPTIONS 那几挡用满。 */
-var TIER_MS = { easy: 180000, mid: 300000, hard: 600000, extreme: 1200000 };
+/* 每挡多久：容易到极难 3 → 20 分钟，一挡比一挡宽。 */
+var TIER_MS = { easy: 180000, mid: 300000, advanced: 600000, hard: 900000, extreme: 1200000 };
 
 /** 留多少天的记录：一年多一点。再老的按日期丢掉，不至于把 localStorage 撑爆。 */
 var KEEP_DAYS = 400;
@@ -162,14 +162,14 @@ export function unlocked(day, tier) {
 }
 
 /** 完成任意一挡就算完成今日挑战（打哪挡都算：「今天来过」就算数）。
- *  四挡只是同一天里可选的四个尺寸，不是四道关卡；解锁链仍然按顺序开。 */
+ *  五挡只是同一天里可选的五个尺寸，不是五道关卡；解锁链仍然按顺序开。 */
 export function complete(day) {
   var d = doneOf(day);
   for (var i = 0; i < DAILY_TIERS.length; i++) if (d[DAILY_TIERS[i]]) return true;
   return false;
 }
 
-/** 今天完成了几挡（0–4），面板与战绩都读这个数。 */
+/** 今天完成了几挡（0–5），面板与战绩都读这个数。 */
 export function countDone(day) {
   var d = doneOf(day), n = 0;
   for (var i = 0; i < DAILY_TIERS.length; i++) if (d[DAILY_TIERS[i]]) n++;

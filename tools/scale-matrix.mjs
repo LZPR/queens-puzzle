@@ -1,7 +1,7 @@
 /* ============================================================================
- * 难度刻度 v2 · 可达性矩阵
+ * 难度刻度 v3 · 可达性矩阵
  * ----------------------------------------------------------------------------
- * 每个尺寸抽一批盘，按 v2 刻度打分，统计：
+ * 每个尺寸抽一批盘，按 v3 刻度打分，统计：
  *   · 单盘分数的 p10 / 中位 / p90 / 最大
  *   · 模拟「每局抽 K 张取最高分」之后的分位数
  *   · 各档位占比（档位阈值与 DIFF_BANDS.min 一致）
@@ -32,11 +32,13 @@ const K = Math.max(1, Number(args.get('k')) || 3);
 const engine = require(path.join(here, '..', 'src', 'js', 'engine', 'engine.js'));
 const diff = require(path.join(here, '..', 'src', 'js', 'engine', 'difficulty.js'));
 
+/* 阈值与 core/config.js 的 DIFF_BANDS 一致（绝对分，容易从 0 起） */
 const BANDS = [
   { tone: 'easy', name: '容易', min: 0 },
-  { tone: 'mid', name: '中等', min: 5.5 },
-  { tone: 'hard', name: '困难', min: 7.0 },
-  { tone: 'extreme', name: '极难', min: 8.4 }
+  { tone: 'mid', name: '中等', min: 6.0 },
+  { tone: 'advanced', name: '较难', min: 7.0 },
+  { tone: 'hard', name: '困难', min: 10.0 },
+  { tone: 'extreme', name: '极难', min: 11.3 }
 ];
 
 /* splitmix32：给每个 (n, k) 一个互不相关的种子 */

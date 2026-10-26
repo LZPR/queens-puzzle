@@ -5,8 +5,8 @@
  *
  *   自定义 —— 棋盘大小、目标难度、挑战全都自己挑（原来的玩法，一个字没改）
  *   每日挑战 —— 一天一盘，只跟日期有关（见 core/daily.js / app/daily.js）：
- *                难度四挡，完成前一挡才解锁下一挡；棋盘固定该挡最大盘；
- *                限时按挡位 3 / 5 / 10 / 20 分钟；步数不限、禁用提示、
+ *                难度五挡，完成前一挡才解锁下一挡；棋盘固定该挡最大盘；
+ *                限时按挡位 3 / 5 / 10 / 15 / 20 分钟；步数不限、禁用提示、
  *                可以撤销、禁用记录点、标错扣 3 条命。这些全锁着，改不了。
  *
  * 自定义那一路的三组（尺寸 / 难度 / 挑战）都只写 pending，点「换一局」才落地
@@ -105,6 +105,7 @@ export var HTML = /* html */ `
         <button class="dbtn is-on" type="button" data-level="any" aria-pressed="true">不限</button>
         <button class="dbtn" type="button" data-level="easy" aria-pressed="false">容易</button>
         <button class="dbtn" type="button" data-level="mid" aria-pressed="false">中等</button>
+        <button class="dbtn" type="button" data-level="advanced" aria-pressed="false">较难</button>
         <button class="dbtn" type="button" data-level="hard" aria-pressed="false">困难</button>
         <button class="dbtn" type="button" data-level="extreme" aria-pressed="false">极难</button>
       </div>
@@ -394,10 +395,15 @@ export function commitChallenge() {
    ========================================================== */
 /* 档位开放给玩家的尺寸区间。没选档位就是全量 4–16。
  * 这不是「限制」，是实测出来的可达性：4×4 里不存在困难的盘，
- * 16×16 也不会是容易的，把够不着的组合收起来比让人选完失望好。 */
+ * 16×16 也不会是容易的，把够不着的组合收起来比让人选完失望好。
+ * 区间可能只有一格（极难只开 16×16），文案就别写成「16×16–16×16」。 */
 function rangeOf(level) {
   var b = level && level !== 'any' ? DIFF_BANDS[level] : null;
   return b ? [b.lo, b.hi] : [SIZE_MIN, SIZE_MAX];
+}
+
+function rangeText(lo, hi) {
+  return lo === hi ? lo + '×' + lo : lo + '×' + lo + '–' + hi + '×' + hi;
 }
 
 /* 「不限」时给几个常用尺寸；选了档位就把这一档开放的尺寸全摊开 */
@@ -461,7 +467,7 @@ export function syncNew() {
    * 难度那行说「这一档的分数区间」+ 什么时候生效。 */
   sizeHint.textContent = daily
     ? '每日挑战固定为「' + band.name + '」最大盘：' + rule.size + '×' + rule.size
-    : (band ? '「' + band.name + '」开放 ' + lo + '×' + lo + '–' + hi + '×' + hi
+    : (band ? '「' + band.name + '」开放 ' + rangeText(lo, hi)
         : '4×4 到 16×16，每盘唯一解');
 
   note.textContent = noteText(day);
@@ -787,7 +793,7 @@ export function mount(host) {
     var band = lv !== 'any' ? DIFF_BANDS[lv] : null;
     announce(band
       ? '目标难度：' + band.name + '，' + bandRangeLabel(band) + '，开放 ' +
-        band.lo + '×' + band.lo + '–' + band.hi + '×' + band.hi +
+        rangeText(band.lo, band.hi) +
         '，先按 ' + pending.size + '×' + pending.size + ' 出（换一局后生效）'
       : '目标难度：不限（换一局后生效）');
   });

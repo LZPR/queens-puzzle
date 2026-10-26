@@ -193,6 +193,7 @@
 
 .rec-lv[data-tone="easy"] { background: #DFF5E8; }
 .rec-lv[data-tone="mid"] { background: var(--accent-soft); }
+.rec-lv[data-tone="advanced"] { background: #FFE9C6; }
 .rec-lv[data-tone="hard"] { background: #FFE4D2; }
 .rec-lv[data-tone="extreme"] { background: #FFDDDD; }
 
@@ -486,7 +487,7 @@
    18. 每日挑战角标 + 日历
    ------------------------------------------------------------
    记录列表里，每日挑战那一局的难度胶囊旁边挂一枚「每日」；
-   第三栏是一本日历：一天一格，四颗小点就是四挡（容易 → 极难），
+   第三栏是一本日历：一天一格，五颗小点就是五挡（容易 → 极难），
    打了任意一挡的那天整格点亮 + 一个 ✓。
    ============================================================ */
 .rec-daily {
@@ -595,7 +596,7 @@
   color: var(--ink-mute);
 }
 
-/* 四颗小点：从左到右 容易 / 中等 / 困难 / 极难 */
+/* 五颗小点：从左到右 容易 / 中等 / 较难 / 困难 / 极难 */
 .cal-dots {
   display: flex;
   gap: 2px;
@@ -610,6 +611,7 @@
 
 .cal-dots i.is-on[data-tone="easy"] { background: #22B573; }
 .cal-dots i.is-on[data-tone="mid"] { background: #E0A81E; }
+.cal-dots i.is-on[data-tone="advanced"] { background: #E08A1E; }
 .cal-dots i.is-on[data-tone="hard"] { background: #F2762E; }
 .cal-dots i.is-on[data-tone="extreme"] { background: #E23B3B; }
 
@@ -671,6 +673,7 @@
 
 .cal-key i[data-tone="easy"] { background: #22B573; }
 .cal-key i[data-tone="mid"] { background: #E0A81E; }
+.cal-key i[data-tone="advanced"] { background: #E08A1E; }
 .cal-key i[data-tone="hard"] { background: #F2762E; }
 .cal-key i[data-tone="extreme"] { background: #E23B3B; }
 
