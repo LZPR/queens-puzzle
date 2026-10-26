@@ -27,7 +27,8 @@ import { dismissMismatch, showMismatch } from '../ui/panels/mismatch.js';
    ----------------------------------------------------------
    尺寸由玩家在「目标难度」开放的区间里挑（见 DIFF_BANDS），这里只负责夹一次；
    然后一张一张抽，抽到分数落进 [min, max) 的就装。抽不到就一直抽，
-   最多给这轮 3 秒（见 SEARCH_MS）；3 秒都没抽到才不装盘，反过来问玩家
+   最多给这轮 3 秒（极难 6 秒，见 SEARCH_MS / SEARCH_MS_EXTREME）；
+   到点都没抽到才不装盘，反过来问玩家
    「再抽一局 / 更换设置」——见下面的 roll()。
    出题是同步的：算的时候主线程被占住，动画也会冻住，所以遮罩只是「告知」，
    不是「装饰」。快的时候根本不该出现——见 showVeil 的 delay；
@@ -46,7 +47,7 @@ function estBlock(n) {
 /* 遮罩什么时候露：
  *   单张生成本身就慢（实测/估算 ≥ 90ms）→ 0，立刻露脸且不做淡入；
  *   否则给个拖延（默认 90ms，挑盘时 260ms）——比这还快就当没这回事。
- * 挑盘那条（有目标难度）等得更久：一轮最长 3 秒，但「抽两张就中」才是常态，
+ * 挑盘那条（有目标难度）等得更久：一轮最长 3 秒（极难 6 秒），但「抽两张就中」才是常态，
  * 摊上三四百毫秒的局也不少，90ms 就露会让遮罩看着闪了一下。 */
 export function veilDelayFor(n, quiet) {
   if (estBlock(n) >= 90) return 0;
@@ -89,19 +90,28 @@ function targetBand() {
  * band 为 null（不限难度）时只生成一张就走。
  *
  * 两头都不够格不是「失败」——这时**先别问玩家，自己接着抽**（见 search()）。
- * 单张落进档内的概率只有二到五成（8×8 的困难盘只有约一成），一抽空就弹卡的话，
+ * 单张落进档内的概率只有二成上下，一抽空就弹卡的话，
  * 玩家大部分时候都要为一个「其实再等半秒就有」的盘去点一下鼠标。
- * 时间才是他唯一有直觉的尺度：给这轮 3 秒，抽到了就当没这回事。
+ * 时间才是他唯一有直觉的尺度：给这轮几秒，抽到了就当没这回事。
  *
  * 真等满了还没抽到，才**不装盘**，交给 mismatch 层问玩家要不要再抽
  * （见 ui/panels/mismatch.js）；凑合装上去，目标难度就名存实亡。
- * 上界同样要卡：只卡下限的话，选「困难」会掉出一盘 8.6 的极难盘。
+ * 上界同样要卡：只卡下限的话，选「困难」会掉出一盘 11.5 的极难盘。
  * 那一层拿到的读数是「离区间最近」的那一头 —— 偏低报最高、偏高报最低。
  *
  * 一轮下来累计抽了多少张（acc.draws）只为了给那一层照实报个数，
  * 不再是收手的条件：收手看时间。
  */
 var SEARCH_MS = 3000;
+/* 极难单张命中率只有 5% 上下（16×16），3 秒窗口里一半的局都抽不到，
+ * 所以这一档单独放宽到 6 秒（docs/难度系统v3-无限分绝对阈值-实施计划.md 第 5 节）。
+ * 放宽的是「抽多久」，不是「装不装」：6 秒还没够格，照样交给 mismatch。 */
+var SEARCH_MS_EXTREME = 6000;
+
+/** 这一档给这轮多少毫秒：极难 6 秒，其余 3 秒。 */
+function searchMsOf(band) {
+  return band && band === DIFF_BANDS.extreme ? SEARCH_MS_EXTREME : SEARCH_MS;
+}
 
 /* 每占住主线程这么久就让出一帧：遮罩上的读数才刷得出来、动画才走得动，
  * 也不至于长到浏览器想报「页面无响应」。单张生成本身就超过这个数的
@@ -148,7 +158,7 @@ function search(n, band, acc, token, done) {
     var now = performance.now();
     if (now >= acc.deadline) return done(null); // 等够了，交给那一层去问玩家
     if (now < soft) continue;
-    /* 整整一截一张都没生成出来（引擎连着抛错）：那是真失败，别干等 3 秒 */
+    /* 整整一截一张都没生成出来（引擎连着抛错）：那是真失败，别干等满窗口 */
     if (acc.draws === before) return done(null);
     saySearching(n, band, acc.draws);
     window.setTimeout(function () { search(n, band, acc, token, done); }, 0);
@@ -182,9 +192,10 @@ export function newGame(size) {
 var lastRollInfo = null;
 export function lastRoll() { return lastRollInfo; }
 
-/* 出一盘：抽到够格的装上；等满 SEARCH_MS 还没抽到，才摆出两条路让玩家选。
+/* 出一盘：抽到够格的装上；等满这一档的窗口（3 秒 / 极难 6 秒）还没抽到，
+ * 才摆出两条路让玩家选。
  * tried 是「这次换局之前已经抽掉多少张」——再抽时累加上去，
- * 好让那一层照实说「13×13 找了 3.0 秒、抽了 26 张」。 */
+ * 好让那一层照实说「16×16 找了 6.0 秒、抽了 23 张」。 */
 function roll(n, band, tried) {
   if (isOpen('result')) closeSheet('result', { force: true });
   dismissMismatch();
@@ -192,7 +203,7 @@ function roll(n, band, tried) {
 
   var token = ++rollToken;
   var t0 = performance.now();
-  var acc = { draws: 0, under: null, over: null, deadline: t0 + SEARCH_MS };
+  var acc = { draws: 0, under: null, over: null, deadline: t0 + searchMsOf(band) };
   // 已知这一档会卡就立刻露遮罩，否则先等一会儿——算得快就当没这回事
   var heavy = !!band || n >= 13;
   if (heavy) {
@@ -210,7 +221,7 @@ function roll(n, band, tried) {
     var cost = Math.round(performance.now() - t0);
     lastRollInfo = { size: n, ms: cost, draws: acc.draws, ok: !!got };
     /* 记下单张的大致成本（不是这一轮的总时长）：下次同尺寸靠它决定要不要
-     * 提前露遮罩。按总时长记的话，一次抽空花掉的 3 秒会让之后每一局
+     * 提前露遮罩。按总时长记的话，一次抽空花掉的那几秒会让之后每一局
      * 都立刻闪出一层遮罩。 */
     blockCost[n] = Math.max(blockCost[n] || 0, Math.round(cost / Math.max(acc.draws, 1)));
 

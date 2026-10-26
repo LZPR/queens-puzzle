@@ -5,8 +5,9 @@
  * `DIFF_BANDS[x]` 的 `[min, max)` 区间里的盘时，由 app/puzzle.js 调 showMismatch()，
  * 那一盘**不装**。
  *
- * 注意它是个兜底，不是常规流程：puzzle 的 search() 会先替玩家多抽 3 秒
- * （见那边的 SEARCH_MS），抽到了就当没这回事。等满还抽不到——这个档位
+ * 注意它是个兜底，不是常规流程：puzzle 的 search() 会先替玩家多抽几秒
+ * （默认 3 秒、极难 6 秒，见那边的 SEARCH_MS / SEARCH_MS_EXTREME），
+ * 抽到了就当没这回事。等满还抽不到——这个档位
  * 在这个尺寸上根本够不着——才轮到这里。所以读数里报的是「找了多久」，
  * 不只是「抽了几张」：时间才是玩家刚才实际付出的东西。
  *
@@ -32,10 +33,10 @@ export var HTML = /* html */ `
   <div class="result-card" role="dialog" aria-modal="true" aria-labelledby="mmTitle" aria-describedby="mmSub">
     <p class="result-kicker" id="mmKicker">TOO EASY</p>
     <h2 class="result-title" id="mmTitle">还不够「极难」</h2>
-    <p class="result-sub" id="mmSub">13×13 找了 3.0 秒，抽了 26 张</p>
+    <p class="result-sub" id="mmSub">16×16 找了 6.0 秒，抽了 23 张</p>
     <div class="result-stats">
-      <div class="result-stat"><b id="mmNeed">8.4</b><span id="mmNeedLabel">档位要求</span></div>
-      <div class="result-stat"><b id="mmBest">7.8</b><span id="mmBestLabel">这批最高（困难）</span></div>
+      <div class="result-stat"><b id="mmNeed">11.3</b><span id="mmNeedLabel">档位要求</span></div>
+      <div class="result-stat"><b id="mmBest">11.1</b><span id="mmBestLabel">这批最高（困难）</span></div>
     </div>
     <button class="btn btn-hint" id="btnMmRetry" type="button">再抽一局</button>
     <div class="result-links">

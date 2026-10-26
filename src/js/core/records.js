@@ -13,13 +13,14 @@
 import { DIFF_BANDS, RECORD_MAX, SIZE_MAX, SIZE_MIN, STORE_RECORDS,
   normalizeLimit, normalizeSteps } from './config.js';
 
-/** 难度档，和 DIFF_BANDS 的键、以及本局难度评估的 tone 是同一套。 */
-export var RECORD_TONES = ['easy', 'mid', 'hard', 'extreme'];
+/** 难度档，和 DIFF_BANDS 的键、以及本局难度评估的 tone 是同一套（五档）。 */
+export var RECORD_TONES = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
 
 /* 现在用的是第几版难度刻度（engine/difficulty.js 的 SCALE_VERSION）。
- * 老记录的 lv / sc 是按旧刻度算的，13×13 当时还算「极难」，跟新记录没法比，
- * 所以它们只在列表里留着看，不进排行榜（见 group / countOf）。 */
-export var RECORD_SCALE = 2;
+ * 老记录的 lv / sc 是按旧刻度算的，14×14 当时还算「极难」、分数截在 9.9，
+ * 跟新记录没法比，所以它们只在列表里留着看，不进排行榜（见 group / countOf）。
+ *   sq=1 / 2 → v1、v2 刻度（旧）；sq=3 → 当前刻度。 */
+export var RECORD_SCALE = 3;
 
 var HEX = '0123456789ABCDEF';
 
@@ -57,10 +58,12 @@ export function toneName(tone) {
   return DIFF_BANDS[tone] ? DIFF_BANDS[tone].name : '中等';
 }
 
-/** 没有难度评估时（引擎没加载 / 存档很老）按尺寸兜底分档。 */
+/** 没有难度评估时（引擎没加载 / 存档很老）按尺寸兜底分档。
+ *  尺寸区间在 16×16 上是重叠的（困难 15–16、极难 16），所以**从难到易**找：
+ *  先问极难，16×16 才算极难；15×15 落回困难，14×14 及以下才是较难。 */
 export function toneOfSize(n) {
   n = clampNum(n, SIZE_MIN, SIZE_MAX);
-  for (var i = 0; i < RECORD_TONES.length; i++) {
+  for (var i = RECORD_TONES.length - 1; i >= 0; i--) {
     var b = DIFF_BANDS[RECORD_TONES[i]];
     if (n >= b.lo && n <= b.hi) return RECORD_TONES[i];
   }
@@ -72,14 +75,14 @@ export function toneOfSize(n) {
  *   at  结束时刻（Date.now）
  *   n   边长   sd 出题种子
  *   rg  色块（n*n 个十六进制字符）  so 解（每行皇后的列）
- *   lv  难度档（easy/mid/hard/extreme）  sc 难度体感分  sq 刻度版本
+ *   lv  难度档（easy/mid/advanced/hard/extreme）  sc 难度体感分  sq 刻度版本
  *   lim 本局限时（0 = 不限）  ms 用时
  *   sl  本局步数限制（0 = 不限）  st 这一局走了几步
  *   h   提示次数  mv 落子次数（放了几只皇后，不是步数）
  *   won 是否解开  lr 输的原因（time / steps / lives，解开时为空）
  *   nh 禁用提示  nu 禁用撤销
  *   dy 每日挑战的日期（'2026-10-26'，不是每日挑战就没有这个字段）
- *   dt 每日挑战的档位（easy/mid/hard/extreme，跟 dy 一起出现）
+ *   dt 每日挑战的档位（easy/mid/advanced/hard/extreme，跟 dy 一起出现）
  *
  *   st 与 mv 都留着：老记录没有 st（那时还没记真步数），列表里退回用 mv；
  *   mv 现在仍然进战绩，答的是「落了几只皇后」。

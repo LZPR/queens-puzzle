@@ -1,12 +1,12 @@
 /* ============================================================================
- * 难度刻度 v2 · 验收
+ * 难度刻度 v3 · 验收
  * ----------------------------------------------------------------------------
  * 断六条：
  *   1. 单调   —— 固定尺寸，试推越多分越高；固定试推，开局推进越少分越高
  *   2. 区分度 —— 同尺寸内分数散得开（旧刻度压成 0.05–0.16 的 σ）
  *   3. 跨尺寸 —— 大盘整体还是比小盘难（16×16 的 p10 > 4×4 的 p90）
- *   4. 可达性 —— 极难真能在 14–16 上抽到（K=3 取最高的命中率）
- *   5. 量程   —— 所有盘落在 1.0–9.9；小盘不该出高档
+ *   4. 可达性 —— 16×16 真能抽到极难（K=3 取最高的命中率）
+ *   5. 量程   —— 分数没有上限（16×16 能过 10）；小盘不该出高档
  *   6. 阈值   —— config.js 的 DIFF_BANDS.min/max 与 difficulty.js 的 levelOf 对齐
  *
  *   node tools/check-scale.mjs
@@ -132,32 +132,31 @@ console.log('\n[3] 跨尺寸');
 }
 
 /* ---------- 4. 可达性 ---------- */
-console.log('\n[4] 极难可达性（模拟 K=3 取最高）');
+console.log('\n[4] 极难可达性（16×16，模拟 K=3 取最高）');
 {
   const ext = BANDS.extreme.min;
-  const rates = [];
-  for (const n of [14, 15, 16]) {
-    const sc = pools.get(n).map(v => v.score);
-    const rnd = splitmix32(0xC0FFEE + n);
-    let h = 0;
-    for (let t = 0; t < 400; t++) {
-      const bag = sc.slice();
-      let best = -1;
-      for (let i = 0; i < 3 && bag.length; i++) {
-        const j = Math.floor((rnd() / 4294967296) * bag.length);
-        const v = bag.splice(j, 1)[0];
-        if (v > best) best = v;
-      }
-      if (best >= ext) h++;
+  const sc = pools.get(16).map(v => v.score);
+  const rnd = splitmix32(0xC0FFEE + 16);
+  let h = 0;
+  for (let t = 0; t < 800; t++) {
+    const bag = sc.slice();
+    let best = -1;
+    for (let i = 0; i < 3 && bag.length; i++) {
+      const j = Math.floor((rnd() / 4294967296) * bag.length);
+      const v = bag.splice(j, 1)[0];
+      if (v > best) best = v;
     }
-    const rate = h / 400;
-    rates.push(rate);
-    console.log(`        ${n}×${n} 极难命中 ${Math.round(100 * rate)}%（池内最高 ${r1(Math.max(...sc))}）`);
+    if (best >= ext) h++;
   }
-  const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
-  // 单尺寸受池子大小影响（14 盘时命中率抖得厉害），所以看三个尺寸的平均 + 单尺寸兜底
-  ok('每个尺寸都能抽到极难（≥ 40%）', rates.every(r => r >= 0.40), rates.map(r => Math.round(100 * r) + '%'));
-  ok('14–16 的极难命中率平均 ≥ 55%', avg >= 0.55, Math.round(100 * avg) + '%');
+  const rate = h / 800;
+  console.log(`        16×16 极难命中 ${Math.round(100 * rate)}%（池内最高 ${r1(Math.max(...sc))}）`);
+  ok('16×16 抽得出 ≥' + ext + ' 分的盘', Math.max(...sc) >= ext, r1(Math.max(...sc)));
+  /* 单张 5% 上下，K=3 取最高之后约三成 —— 门槛压到 15%，只证明「够得着」 */
+  ok('16×16 的极难命中率（K=3 取最高）≥ 15%', rate >= 0.15, Math.round(100 * rate) + '%');
+
+  const hard16 = sc.filter(v => v >= BANDS.hard.min && v < BANDS.hard.max);
+  ok('16×16 同时出得了困难与极难（区间重叠是有意的）',
+    hard16.length > 0 && sc.some(v => v >= BANDS.extreme.min), hard16.length + '/' + sc.length);
 }
 
 /* ---------- 5. 量程 ---------- */
@@ -165,18 +164,22 @@ console.log('\n[5] 量程');
 {
   const all = [];
   pools.forEach(arr => arr.forEach(v => all.push(v.score)));
-  ok('落在 1.0–9.9', all.every(v => v >= 1 && v <= 9.9),
+  /* v3 取消了 9.9 的硬上限，但也不该溢出到荒唐的数（16×16 实测最高约 12.4） */
+  ok('下限 1 分起、没有 9.9 上限、也没有溢出', all.every(v => v >= 1 && v < 14),
     { min: Math.min(...all), max: Math.max(...all) });
   ok('下限没有塌到 2 分以下', Math.min(...all) >= 2, Math.min(...all));
+  ok('16×16 的分数超过了 10（旧刻度在这一段全被截成 9.9）',
+    Math.max(...pools.get(16).map(v => v.score)) > 10,
+    r1(Math.max(...pools.get(16).map(v => v.score))));
   const small = pools.get(4).concat(pools.get(6)).map(v => v.score);
-  ok('4×4 / 6×6 不出困难以上', small.every(v => v < BANDS.hard.min), r1(Math.max(...small)));
+  ok('4×4 / 6×6 不出较难以上', small.every(v => v < BANDS.advanced.min), r1(Math.max(...small)));
 }
 
 /* ---------- 6. 阈值与档位 ---------- */
 console.log('\n[6] 阈值与 DIFF_BANDS');
 {
   const check = [
-    ['easy', '容易'], ['mid', '中等'], ['hard', '困难'], ['extreme', '极难']
+    ['easy', '容易'], ['mid', '中等'], ['advanced', '较难'], ['hard', '困难'], ['extreme', '极难']
   ];
   let aligned = true;
   for (const [tone, name] of check) {
@@ -188,29 +191,36 @@ console.log('\n[6] 阈值与 DIFF_BANDS');
   ok('每档的分数下限正好是 levelOf 的分界线', aligned,
     Object.keys(BANDS).map(k => k + ':' + BANDS[k].min).join(' '));
 
-  /* 上界同样要对齐：max 是开区间（正好 8.4 算极难），所以它必须就是下一档的 min，
-   * 这样出题时才不会出现「选了困难、盘写着极难」。最后一档不封顶。 */
-  const chain = ['easy', 'mid', 'hard', 'extreme'];
+  /* 上界同样要对齐：max 是开区间（正好 10.0 算困难），所以它必须就是下一档的 min，
+   * 这样出题时才不会出现「选了困难、盘写着极难」。最后一档不封顶（写 99）。 */
+  const chain = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
   let caps = true;
   for (let i = 0; i < chain.length; i++) {
     const b = BANDS[chain[i]];
     const next = BANDS[chain[i + 1]];
-    if (!(b.max > b.min)) caps = false;
     if (next) {
+      if (!(b.max > b.min)) caps = false;
       if (b.max !== next.min) caps = false;
       if (diff.levelOf(b.max).level !== next.name) caps = false;
-    } else if (b.max < 9.9) caps = false;
+    } else if (!(b.max >= 11.3)) {
+      caps = false;   // 最后一档的 max 只是个「不封顶」的写法，不能小于自己的下限
+    }
   }
   ok('每档的分数上限正好是下一档的下限（开区间，不叠不漏）', caps,
     chain.map(t => t + ': ' + BANDS[t].min + '–' + BANDS[t].max).join('  '));
 
-  const tones = ['easy', 'mid', 'hard', 'extreme'];
+  ok('极难只开 16×16', BANDS.extreme.lo === 16 && BANDS.extreme.hi === 16,
+    BANDS.extreme.lo + '–' + BANDS.extreme.hi);
+  ok('困难开 15×16（和极难在 16 上重叠）', BANDS.hard.lo === 15 && BANDS.hard.hi === 16,
+    BANDS.hard.lo + '–' + BANDS.hard.hi);
+
+  const tones = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
   let nested = true;
   for (let i = 1; i < tones.length; i++) {
-    if (!(BANDS[tones[i]].lo > BANDS[tones[i - 1]].hi)) nested = false;
+    if (!(BANDS[tones[i]].lo >= BANDS[tones[i - 1]].hi)) nested = false;
     if (!(BANDS[tones[i]].min > BANDS[tones[i - 1]].min)) nested = false;
   }
-  ok('尺寸区间由易到难依次错开、下限递增', nested,
+  ok('尺寸区间由易到难依次抬高（边缘可以重叠）', nested,
     tones.map(t => BANDS[t].lo + '-' + BANDS[t].hi).join(' | '));
 
   ok('尺寸区间都在 4–16 之内', tones.every(t => BANDS[t].lo >= 4 && BANDS[t].hi <= 16),

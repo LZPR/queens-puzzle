@@ -6,19 +6,22 @@
  * 「日期 + 档位 + 第几次尝试」算一个稳定的 32 位种子，交给
  * engine.generate(n, seed) —— 引擎本来就是给定种子就出同一盘的。
  *
- * 为什么要试几次：固定尺寸的盘不一定落进同名档位（13×13 也可能只有 6.9 分，
+ * 为什么要试几次：固定尺寸的盘不一定落进同名档位（14×14 也可能只有 6.9 分，
  * 那就是中等）。所以顺着同一个日期往后取几个种子，挑第一张真的属于这一档的；
- * 都试不到就用手上最后一张，照常开局 —— 每日挑战不允许「今天这档打不了」，
+ * 都试不到就用手上**分数最高**的那张，照常开局 —— 每日挑战不允许「今天这档打不了」，
  * 那是 ui/panels/mismatch.js 那种兜底才管的事。
  *
  * 尝试次数是个定数，别改成「抽到够格为止」：那样在慢设备上会抽到天荒地老，
  * 而每次尝试本身就要几十毫秒（16×16 更久）。
+ * 极难（≥11.3 分）单张命中率只有 5% 上下，所以那一挡多试几次；即便如此也常有
+ * 一天抽不到，此时装的是这批里最硬的那张 —— 差一点，但不会是一张随手的软盘。
  * ========================================================================== */
 
 import { dayKey, ruleOf } from '../core/daily.js';
 import { computeVibe } from '../game/vibe.js';
 
-var ATTEMPTS = 6;
+/* 每挡试几张：低三挡 6 张就够（命中率高），困难 / 极难逐级加码。 */
+var ATTEMPTS = { easy: 6, mid: 6, advanced: 6, hard: 8, extreme: 10 };
 
 /* FNV-1a：把一句话揉成一个 32 位整数。用它而不是 Math.random：
  * 同一句话在任何设备上都得到同一个数。 */
@@ -42,14 +45,19 @@ export function buildDaily(tier, day) {
   var rule = ruleOf(tier);
   if (!rule || !window.QueensEngine) return null;
   var d = day || dayKey();
+  var tries = ATTEMPTS[tier] || 6;
   var last = null;
-  for (var i = 0; i < ATTEMPTS; i++) {
+  var hardest = null;
+  for (var i = 0; i < tries; i++) {
     var b = null;
     try { b = window.QueensEngine.generate(rule.size, seedOf(d, tier, i)); } catch (e) { b = null; }
     if (!b) continue;
     var v = computeVibe(b.size, b.regions, b.solution);
     last = { board: b, vibe: v };
-    if (v && v.tone === tier) break;
+    if (v && (!hardest || v.score > hardest.vibe.score)) hardest = last;
+    if (v && v.tone === tier) return last;   // 正好落进同名档位，就是它了
   }
-  return last;
+  /* 一张都没对上：装这批里分数最高的那张（极难常常走到这里）。
+   * 没有可比的分数（度量挂了）就退回最后一张，跟以前的兜底一致。 */
+  return hardest || last;
 }

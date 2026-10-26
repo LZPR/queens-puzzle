@@ -291,6 +291,7 @@
 
 .dbtn[data-level="easy"].is-on { background: #22B573; color: #fff; }
 .dbtn[data-level="mid"].is-on { background: var(--accent); color: var(--ink); }
+.dbtn[data-level="advanced"].is-on { background: #E08A1E; color: #fff; }
 .dbtn[data-level="hard"].is-on { background: #F2762E; color: #fff; }
 .dbtn[data-level="extreme"].is-on { background: #E23B3B; color: #fff; }
 

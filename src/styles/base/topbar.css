@@ -212,5 +212,6 @@
 
 .hud-diff[data-tone="easy"] .hud-dot { background: #22B573; }
 .hud-diff[data-tone="mid"] .hud-dot { background: #E0A800; }
+.hud-diff[data-tone="advanced"] .hud-dot { background: #E08A1E; }
 .hud-diff[data-tone="hard"] .hud-dot { background: #F2762E; }
 .hud-diff[data-tone="extreme"] .hud-dot { background: #E23B3B; }

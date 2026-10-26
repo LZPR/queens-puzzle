@@ -8,18 +8,21 @@
  *   · 两种玩法（自定义 / 每日挑战）在面板顶上切；挑战组可折叠，选每日自动摊开
  *   · 每日挑战的每一项都锁死：棋盘 = 该挡最大盘、限时按挡位、步数不限、
  *     禁用提示、可以撤销、禁用记录点、标错 3 条命
- *   · 难度四挡，完成前一挡才解锁下一挡；打完任意一挡就算完成今日挑战
+ *   · 难度五挡（容易→中等→较难→困难→极难），完成前一挡才解锁下一挡；
+ *     打完任意一挡就算完成今日挑战
  *   · 同一挡的棋盘只跟日期有关：打两次拿到的是同一盘；只写内存里的状态，
  *     不改写玩家自己的设置
  *   · 解开才记账（core/daily.js），战绩里那本日历按天点亮
  * ========================================================================== */
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 const require = createRequire('C:/Users/CJL/.workbuddy/binaries/node/workspace/');
 const puppeteer = require('puppeteer-core');
 
 const URL = process.env.QURL || 'http://127.0.0.1:8080/';
-const SHOTS = 'E:/Projects/Games/queens-puzzle/tools/shots/';
+const SHOTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'shots') + path.sep;
 mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -174,8 +177,8 @@ ok('切过去自动摊开挑战组', p.challengeOpen);
 ok('标题说明这一组是锁着的', /已锁定/.test(p.title), p.title);
 ok('每日里没有「不限」难度', p.diffs.every(d => d.lv !== 'any' || d.hid), p.diffs);
 ok('第一档「容易」开着', p.diffs.some(d => d.lv === 'easy' && !d.dis && d.on), p.diffs);
-ok('后三档今天还锁着',
-  ['mid', 'hard', 'extreme'].every(lv => p.diffs.some(d => d.lv === lv && d.dis)), p.diffs);
+ok('后面四档今天还锁着',
+  ['mid', 'advanced', 'hard', 'extreme'].every(lv => p.diffs.some(d => d.lv === lv && d.dis)), p.diffs);
 ok('棋盘固定 5×5（容易的最大盘）', p.sizeVal === '5', p.sizeVal);
 ok('步进器按不动', p.sizeMinus && p.sizePlus);
 ok('常用尺寸那一行收起', p.quickHidden);
@@ -194,7 +197,7 @@ ok('说明写明扣 3 条', /3 条/.test(p.lifeHint), p.lifeHint);
 ok('难度那行说清解锁关系', /解锁/.test(p.diffHint), p.diffHint);
 ok('尺寸那行说是最大盘', /5×5/.test(p.sizeHint), p.sizeHint);
 ok('按钮变成「开始今日挑战」', p.shuffle === '开始今日挑战', p.shuffle);
-ok('今日进度 0/4', p.badge === '0/4', p.badge);
+ok('今日进度 0/5', p.badge === '0/5', p.badge);
 ok('面板不横向溢出 / 竖向可滚', true, p.overflow);
 await page.screenshot({ path: `${SHOTS}/daily-2-daily-locked.png` });
 
@@ -267,7 +270,8 @@ let d0 = await st();
 ok('完成「容易」就算完成今日挑战（任意一挡即算）',
   d0.done.easy === true && d0.complete === true, JSON.stringify({ done: d0.done, complete: d0.complete }));
 ok('「中等」解锁了、后面还锁着',
-  d0.unlocked.mid === true && d0.unlocked.hard === false && d0.unlocked.extreme === false, d0.unlocked);
+  d0.unlocked.mid === true && d0.unlocked.advanced === false &&
+  d0.unlocked.hard === false && d0.unlocked.extreme === false, d0.unlocked);
 /* 每日挑战里结果层的「再来一局」不该把玩家丢进一盘自定义：
  * 它回到换一局面板，而且仍停在每日挑战那一路（下一盘打哪挡自己挑）。 */
 await jsClick('#btnAgain');
@@ -330,7 +334,7 @@ ok('今天亮一颗点（容易）', cal.todayDots === 1, cal.todayDots);
 ok('只打了容易也整格点亮 + ✓', cal.todayDone && cal.todayCheck, `${cal.todayDone}/${cal.todayCheck}`);
 ok('整月只有今天这一格点亮', cal.doneCells === 1, cal.doneCells);
 ok('标签角标变成 ✓', cal.badge === '✓', cal.badge);
-ok('图例四挡齐全', cal.legend === 4, cal.legend);
+ok('图例五挡齐全', cal.legend === 5, cal.legend);
 ok('选中那天的读数写着容易与用时', /容易/.test(cal.detail) && /\d\d:\d\d/.test(cal.detail), cal.detail);
 ok('读数说完成今日挑战', /完成今日挑战/.test(cal.detail), cal.detail);
 ok('今天的状态说清已完成', /今日挑战已完成/.test(cal.status), cal.status);
@@ -379,12 +383,13 @@ await page.screenshot({ path: `${SHOTS}/daily-9-cal320.png` });
 await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 await sleep(320);
 
-console.log('\n--- 7. 再打两挡：点变多，完成状态不变 ---');
+console.log('\n--- 7. 再打三挡：点变多，完成状态不变 ---');
 await page.evaluate(() => {
   const d = __QUEENS_DEBUG__;
   const day = d.daily().day;
   d.dailyMark(day, 'mid', 240000, 40);
-  d.dailyMark(day, 'hard', 480000, 70);
+  d.dailyMark(day, 'advanced', 480000, 70);
+  d.dailyMark(day, 'hard', 660000, 90);
 });
 await jsClick('#tabRecs');
 await sleep(150);
@@ -401,22 +406,22 @@ const cal2 = await page.evaluate(() => {
     detail: document.getElementById('calDetail').textContent.trim()
   };
 });
-ok('今天三颗点（容易 / 中等 / 困难）', cal2.dots === 3, cal2.dots);
+ok('今天四颗点（容易 / 中等 / 较难 / 困难）', cal2.dots === 4, cal2.dots);
 ok('仍然是点亮的整格 + ✓', cal2.done && cal2.check, `${cal2.done}/${cal2.check}`);
 ok('角标还是 ✓（多打一挡不改变完成状态）', cal2.badge === '✓', cal2.badge);
-ok('读数把三挡都列出来', /容易/.test(cal2.detail) && /中等/.test(cal2.detail) &&
-  /困难/.test(cal2.detail), cal2.detail);
+ok('读数把四挡都列出来', /容易/.test(cal2.detail) && /中等/.test(cal2.detail) &&
+  /较难/.test(cal2.detail) && /困难/.test(cal2.detail), cal2.detail);
 await page.screenshot({ path: `${SHOTS}/daily-5-done.png` });
 await closeRecords();
 
 console.log('\n--- 8. 解锁链：打完「困难」后「极难」也开了 ---');
 d0 = await st();
-ok('极难解锁、四挡都完成', d0.unlocked.extreme === true && d0.complete === true, d0.unlocked);
+ok('极难解锁、五挡都完成', d0.unlocked.extreme === true && d0.complete === true, d0.unlocked);
 await openSheet();
 await jsClick('#tabModeDaily');
 await sleep(320);
 p = await panel();
-ok('面板四挡都能点', p.diffs.filter(d => d.lv !== 'any').every(d => !d.dis), p.diffs);
+ok('面板五挡都能点', p.diffs.filter(d => d.lv !== 'any').every(d => !d.dis), p.diffs);
 ok('默认停在还没完成的「极难」', p.diffs.some(d => d.lv === 'extreme' && d.on), p.diffs);
 ok('极难 = 16×16 + 20 分钟', p.sizeVal === '16' && p.limitOn.join() === '20 分',
   p.sizeVal + '/' + p.limitOn);
