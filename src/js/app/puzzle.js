@@ -5,7 +5,7 @@
 
 import { sfx } from '../core/audio.js';
 import { DIFF_BANDS, limitLabel, SIZE_MAX, SIZE_MIN } from '../core/config.js';
-import { dayKey, ruleOf, rulesFor } from '../core/daily.js';
+import { dayKey, isDone, ruleOf, rulesFor } from '../core/daily.js';
 import { boardEl, veil, veilTitle } from '../core/dom.js';
 import { guide, settings, state, view } from '../core/state.js';
 import { save, saveSettings } from '../core/storage.js';
@@ -312,6 +312,12 @@ export function applyBoard(n, regions, solution, seed, preVibe, rules) {
   state.noUndo = r ? !!r.noUndo : !!settings.noUndo;
   state.noSnap = r ? !!r.noSnap : !!settings.noSnap;
   state.daily = r && r.daily ? r.daily : null;
+  /* 首通快照：起局那一刻这一挡今天完成过没有。之后解开时 markDaily 会把
+   * isDone 翻成 true，结果层靠这份快照分「头一回解开」（送一次抽奖）和
+   * 「重复游玩」（不送）。抽奖资格同样在这一刻归零——上一局弹没弹过机器，
+   * 对这一局都不算数。 */
+  state.dailyFresh = state.daily ? !isDone(state.daily.day, state.daily.tier) : false;
+  view.drawUsed = false;
   view.lastConflictCount = 0;
   view.undo = [];
   view.redo = [];

@@ -13,8 +13,6 @@
  * ========================================================================== */
 
 import { newGame, retryGame } from '../../app/puzzle.js';
-import { dayLabel, isDone } from '../../core/daily.js';
-import { hasDrawn } from '../../core/draw.js';
 import { limitLabel } from '../../core/config.js';
 import { boardEl } from '../../core/dom.js';
 import { createSheet } from '../../core/sheet.js';
@@ -60,13 +58,11 @@ function rankText() {
   return f.rank === 1 ? ' · 本组最快' : ' · 本组第 ' + f.rank;
 }
 
-/* 抽奖资格：这一局是每日挑战、解开了，而且这一挡今天完成过、还没抽过
- * （core/draw.js 记账）。跟着「完成 + 未抽」走，不跟某一次具体的胜利走：
- * 首通后先去打了别的挡、或者中途刷新，回来这颗按钮还在。 */
+/* 抽奖资格：这一局是每日挑战、解开了，而且是这一挡今天「头一回」解开——
+ * 起局时记下的快照（state.dailyFresh，解开那一刻 isDone 已经翻成 true）。
+ * 资格不落账：老虎机一弹出就算用掉（view.drawUsed），关掉或者错过都不补。 */
 function drawOffered() {
-  if (state.status !== 'won' || !state.daily) return false;
-  return isDone(state.daily.day, state.daily.tier) &&
-    !hasDrawn(state.daily.day, state.daily.tier);
+  return state.status === 'won' && !!state.daily && !!state.dailyFresh && !view.drawUsed;
 }
 
 /* 打开前把这一局的读数写进卡片。who 由 state.status 决定，调用方不用传；
@@ -120,7 +116,7 @@ function paint() {
   btnPeek.textContent = lost ? '换一局新的' : '看看棋盘';
   // 「重来这局」只在解开后露面：输掉的那屏第一个按钮就是重试同一盘，不必再给一个
   btnReplay.hidden = lost;
-  /* 首通某一挡的每日挑战才有的抽奖按钮（抽过就没了，见 core/draw.js） */
+  /* 首通某一挡的每日挑战才有的抽奖按钮（资格用过即没，见 drawOffered） */
   btnDraw.hidden = !drawOffered();
 }
 

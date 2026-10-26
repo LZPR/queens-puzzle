@@ -59,6 +59,11 @@ export const state = {
   /* 这一局是不是每日挑战：{ day: '2026-10-26', tier: 'hard' }，不是就是 null。
    * 解开时据此记账（core/daily.js 的 mark），战绩也据此挂「每日」角标。 */
   daily: null,
+  /* 首通快照：起局那一刻这一挡今天完成过没有（applyBoard / loadGame 里记下）。
+   * 解开时 markDaily 会把 isDone 翻成 true，结果层靠这份快照分
+   * 「头一回解开」（送一次抽奖）和「重复游玩」（不送）。跟着局面走，不落盘——
+   * 刷新回来就当错过了（抽奖资格不补）。 */
+  dailyFresh: false,
   /* 挑战：本局限时（毫秒，0 = 不限）与倒计时起点。
    * limitFrom 记的是「起算那一刻的已用时」，所以剩余 = limit - (已用时 - limitFrom)，
    * 中途改限时不会因为之前耗掉的时间直接判负。 */
@@ -112,7 +117,10 @@ export const view = {
   /* 已经画进 .piece 的皇后样式：外观面板只在真的换了样式时才重画一遍格子里的画 */
   lookPiece: '',
   lastFinish: null,    // 刚结束那局的成绩 { rank, total }，结果层拿它说「本组最快」
-  lastConflictCount: 0
+  lastConflictCount: 0,
+  /* 抽奖资格用掉了没有：老虎机一弹出就记上（不管抽没抽、结果如何），
+   * 关掉或者错过都算放弃。跟着局面走，换盘时由 applyBoard 复位。 */
+  drawUsed: false
 };
 
 /** 棋盘上有没有玩家的痕迹（皇后或手标 ×）。计时靠它决定要不要起表。 */

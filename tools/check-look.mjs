@@ -16,7 +16,7 @@
  *   5. 选「小猫」：html[data-piece] 变、格子里的画换成小猫，皇后仍是皇后
  *   6. 换样式不动局面（marks 不变）、不进 undo 栈
  *   7. 存档：写进 queens.settings.v1，刷新后三样都还在
- *   8. 面板开着时棋盘锁住；Esc / 知道了 / 点背景都能关；焦点回到顶栏
+ *   8. 面板开着时棋盘锁住；Esc / 点背景都能关（没有「知道了」）；焦点回到顶栏
  *   9. 提示行文案跟着样式走、顶栏小黄点标记「换过样式」
  *  10. 认不出来的存档值退回默认
  * ========================================================================== */
@@ -131,7 +131,8 @@ const ui = await page.evaluate(() => {
     })(),
     overflow: document.getElementById('lookSheet').scrollHeight >
       document.getElementById('lookSheet').clientHeight + 4,
-    done: getComputedStyle(document.getElementById('lookSheet').querySelector('.sheet-done')).position
+    doneBtn: !!document.getElementById('btnLookDone'),
+    note: document.querySelector('.look-sheet .sheet-note').textContent
   };
 });
 ok('面板打开', ui.open);
@@ -160,9 +161,11 @@ ok('色块的预览是 2×2 的带图小盘', ui.surfacePrev === 4 && ui.surface
 ok('两个皇后展位都有画', ui.svgs.every(n => n === 1), ui.svgs);
 ok('展位并排', ui.cols);
 /* 四排展柜（色块两行 + 叉 + 皇后 + 生命）在 390×844 上比一屏高：
- * 面板自己滚，「知道了」常开 sticky 钉在下沿 —— 滚到哪都点得到。 */
-ok('内容比一屏高，面板自己滚，「知道了」钉在面板下沿',
-  ui.overflow && ui.done === 'sticky', `${ui.overflow}/${ui.done}`);
+ * 面板自己滚；没有「知道了」按钮，Esc / 叉 / 点背景三条路关。 */
+ok('没有「知道了」按钮，内容比一屏高、面板自己滚',
+  ui.doneBtn === false && ui.overflow, `done=${ui.doneBtn} overflow=${ui.overflow}`);
+ok('说明文字讲的是怎么获取（每日挑战抽奖解锁）',
+  /每日挑战/.test(ui.note) && /抽奖/.test(ui.note) && /三枚一样/.test(ui.note), ui.note);
 await page.screenshot({ path: SHOTS + '20-look-sheet.png' });
 
 // ---------- 2.5 展柜上锁：每排第一套白送，其余全锁着 ----------
@@ -455,15 +458,11 @@ ok('刷新后棋盘照着样式画', afterReload.cat > 0 && afterReload.skin ===
   `cat=${afterReload.cat} defs=${afterReload.skin}`);
 ok('刷新后小黄点还在', afterReload.set);
 
-// 点背景 / 知道了 都能关
+// 点背景能关（没有「知道了」了）
 await openLook();
 await page.mouse.click(195, 40);
 await sleep(320);
 ok('点背景关闭', await page.evaluate(() => document.getElementById('lookWrap').hidden));
-await openLook();
-await page.click('#btnLookDone');
-await sleep(320);
-ok('「知道了」关闭', await page.evaluate(() => document.getElementById('lookWrap').hidden));
 
 // ---------- 7. 切回默认 + 存档兜底 ----------
 console.log('\n--- 切回默认与兜底 ---');
@@ -575,22 +574,17 @@ await page.setViewport({ width: 360, height: 640, deviceScaleFactor: 2, isMobile
 await boot();
 await openLook();
 const tiny = await page.evaluate(() => {
-  const btn = document.querySelector('.look-sheet .sheet-done');
   const sheet = document.getElementById('lookSheet');
-  const b = btn.getBoundingClientRect(), s = sheet.getBoundingClientRect();
   return {
-    pos: getComputedStyle(btn).position,
-    bottom: Math.round(b.bottom), sheetBottom: Math.round(s.bottom), vh: innerHeight,
+    doneBtn: !!sheet.querySelector('.sheet-done'),
     scrolls: sheet.scrollHeight > sheet.clientHeight + 4,
     // 5 套主题排两行，第二行不能横向跑出去
     rowRight: Math.round(Math.max(...[...document.querySelectorAll('#surfaceRow .showcase')]
       .map(e => e.getBoundingClientRect().right)))
   };
 });
-ok('矮屏上面板确实要滚', tiny.scrolls, `${tiny.bottom}/${tiny.sheetBottom}`);
-ok('矮屏上「知道了」钉在面板底部、不掉到屏幕外',
-  tiny.pos === 'sticky' && tiny.bottom <= tiny.sheetBottom + 1 && tiny.bottom <= tiny.vh + 1,
-  `${tiny.pos} bottom=${tiny.bottom} sheet=${tiny.sheetBottom} vh=${tiny.vh}`);
+ok('矮屏上面板确实要滚', tiny.scrolls, tiny.scrolls);
+ok('矮屏上也没有「知道了」按钮', tiny.doneBtn === false, tiny.doneBtn);
 ok('矮屏上色块展位仍在面板宽度内', tiny.rowRight <= 360 - 10, tiny.rowRight);
 await page.screenshot({ path: SHOTS + '24-look-tiny.png' });
 await page.keyboard.press('Escape');

@@ -6,7 +6,7 @@
 import { elapsedMs } from './clock.js';
 import { DEFAULT_SETTINGS, DIFF_ORDER, normalizeLives, normalizeLimit, normalizeSteps,
   SETTINGS_VERSION, SIZE_MAX, SIZE_MIN, STORE_GAME, STORE_SETTINGS } from './config.js';
-import { parseDaily, rulesFor } from './daily.js';
+import { isDone, parseDaily, rulesFor } from './daily.js';
 import { unlockedStyle } from './unlock.js';
 import { settings, state } from './state.js';
 import { clamp } from './utils.js';
@@ -160,6 +160,9 @@ export function loadGame() {
      * 免得哪天有人把存档改坏了一个字段，就把「禁用提示」这条给漏了。 */
     state.daily = parseDaily(g.daily);
     var dr = state.daily ? rulesFor(state.daily.day, state.daily.tier) : null;
+    /* 首通快照：读档这一刻这一挡今天完成过没有。已完成的那局刷新回来
+     * fresh 是 false——抽奖资格不跟着存档走，错过就当放弃了。 */
+    state.dailyFresh = state.daily ? !isDone(state.daily.day, state.daily.tier) : false;
     /* 步数：老存档没这个字段，先按 0 起——那时没记过，编一个数比 0 更糟。
      * 步数限制同理：存档里有就用存档的（这一局的规则），没有就按当前设置。 */
     state.steps = clamp(parseInt(g.steps, 10) || 0, 0, 999999);

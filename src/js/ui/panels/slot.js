@@ -1,16 +1,17 @@
 /* ============================================================================
  * panels/slot.js · 幸运抽奖（老虎机）
  * ----------------------------------------------------------------------------
- * 第一次解开某一挡的每日挑战，结算界面送一次抽奖（四挡各一次，core/draw.js
- * 记账）。入口在 ui/panels/result.js 的「抽一次奖」按钮，这里只有机器本身：
+ * 头一回解开某一挡的每日挑战，结算界面送一次抽奖。入口在 ui/panels/result.js
+ * 的「抽一次奖」按钮，这里只有机器本身：
  *
  *   · 视觉与手感来自 prototype/slot-machine.html：拉杆（可拖 / 空格也行）、
  *     三条转轮按速度动态模糊、奖品条按结果分档点亮；
- *   · 不用抽奖券：面板开着就能抽，抽一次就完（resolve 时 markDrawn），
- *     转动中 Esc 关不掉（canClose 拦住），抽完「收下」回结算界面；
+ *   · 不用抽奖券、不记账（没有「抽没抽过」的存档）：机器弹出资格就算用掉
+ *     （view.drawUsed），默认只抽一杆；两个一样 / 抽中已解锁的面板里加送一杆，
+ *     关掉或者错过都算放弃；
+ *   · 转动中 Esc 关不掉（canClose 拦住），抽完「收下」回结算界面；
  *   · 奖品就是外观（core/unlock.js 的账本）：三个一样 = 解锁那套外观；
- *     两个一样 = 送一次再抽；抽中的那套已经解锁了 = 也送一次再抽。
- *     送的那次不销资格（不 markDrawn），一直转到真的落定为止；
+ *     两个一样 = 送一次再抽；抽中的那套已经解锁了 = 也送一次再抽；
  *   · 奖池里锁着的套占大多数、已解锁的只是占位的小份——转出来的
  *     「三个一样」绝大多数都是还没到手的；
  *   · 外观全都解锁了之后机器还在，但转不出任何奖励；
@@ -18,13 +19,12 @@
  *     谢谢参与 41%），?luck=unlock|repeat|pair|none 可以钉死档位（只钉一抽），
  *     给自动化测试用；
  *   · ?slot=easy|mid|hard|extreme 开机直接把面板拉起来（测试模式，
- *     抽了不记账）。
+ *     不占资格、可反复抽）。
  * ========================================================================== */
 
 import { buzz, sfx } from '../../core/audio.js';
 import { DIFF_BANDS } from '../../core/config.js';
 import { fxEl } from '../../core/dom.js';
-import { markDrawn } from '../../core/draw.js';
 import { DAILY_TIERS, dayKey, dayLabel } from '../../core/daily.js';
 import { REGION_COLORS } from '../../core/palette.js';
 import { createSheet } from '../../core/sheet.js';
@@ -640,11 +640,6 @@ async function trigger() {
 
   resolve(out);
 
-  // 这一抽落定了才算抽过（core/draw.js）：两个一样、或者抽中的那套已经解锁，
-  // 都送一次再抽——资格先不销，拉杆接着抽，直到谢谢参与 / 真解锁 / 全都解锁。
-  // 测试模式（?slot=）不记，方便反复试。
-  if (!out.extra && !testMode && state.daily) markDrawn(state.daily.day, state.daily.tier);
-
   busy = false;
   document.getElementById('slot').classList.remove('is-spinning');
 }
@@ -700,7 +695,7 @@ function paint() {
   } else {
     testMode = false;
     noteEl.textContent = '第一次解开「' + (band ? band.name : tier || '') + '」挡的奖励 · ' +
-      dayLabel(state.daily ? state.daily.day : null) + ' · 只能抽这一次';
+      dayLabel(state.daily ? state.daily.day : null) + ' · 只能抽这一次，关掉就当放弃';
   }
   busy = false;
   lever.dragging = false;
@@ -709,7 +704,12 @@ function paint() {
 
 export function openSlot() {
   if (!el || busy) return false;
-  return sheet.open();
+  var opened = sheet.open();
+  /* 资格弹出即作数：这一杆抽不抽、抽成什么都只有这一次，
+   * 关掉或者错过都不补（view.drawUsed，结果层据此收按钮）。
+   * 测试模式（?slot=）不占资格，方便反复试。 */
+  if (opened && !testMode) view.drawUsed = true;
+  return opened;
 }
 
 /* ?slot=<挡位>：boot 之后由 main.js 调一次，把面板直接拉起来。

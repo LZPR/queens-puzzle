@@ -15,9 +15,6 @@ export var STORE_RECORDS = 'queens.records.v1';
 /* 每日挑战的完成记录（按天按档位，见 core/daily.js）。跟战绩分开存：
  * 「清空全部记录」不该把日历一起清掉。 */
 export var STORE_DAILY = 'queens.daily.v1';
-/* 每日挑战的抽奖记录（哪个挡抽过了，见 core/draw.js）。跟完成记录分开存：
- * 完成记录会被重复游玩覆盖，说不了「头一回」。 */
-export var STORE_DAILY_DRAW = 'queens.dailydraw.v1';
 /* 外观解锁账本（哪几套样式抽出来了，见 core/unlock.js）。
  * 跟设置分开存：换哪套是偏好（settings），有没有抽到是家底（这里）。 */
 export var STORE_LOOKS = 'queens.looks.v1';

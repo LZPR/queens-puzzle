@@ -13,7 +13,6 @@ import { hintEl, sheetsHost, stage } from './core/dom.js';
 import { guide, hasProgress, settings, state, view } from './core/state.js';
 import { doSave, loadGame, loadSettings } from './core/storage.js';
 import * as daily from './core/daily.js';
-import * as draw from './core/draw.js';
 import * as records from './core/records.js';
 import { clear as clearLooks, snapshot as looksSnapshot, unlockAll as unlockAllLooks,
   unlock as unlockLook } from './core/unlock.js';
@@ -214,9 +213,8 @@ window.__QUEENS_DEBUG__ = {
   dailyMark: daily.mark,
   dailyClear: daily.clear,
   startDaily: newDaily,
-  // 每日挑战的抽奖：今天哪几挡抽过了、清空记录、老虎机探针（见 tools/check-slot.mjs）
-  dailyDrawn: function () { return draw.drawnOf(daily.dayKey()); },
-  dailyDrawClear: draw.clear,
+  // 抽奖：老虎机探针（见 tools/check-slot.mjs）。资格不记账——
+  // 弹出即用掉（view.drawUsed），没有「抽没抽过」的存档
   slot: slotProbe,
   openSlot: openSlot,
   // 外观：面板开关 + 当前样式，只给 tools/ 里的自动化测试用

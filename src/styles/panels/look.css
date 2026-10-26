@@ -33,19 +33,6 @@ html[data-piece="cat"] .piece svg { filter: none; }
    ============================================================ */
 .look-sheet { padding-top: 14px; }
 
-/* 「知道了」钉在面板下沿：四排展柜加起来在 390×844 上已经超过一屏（.sheet 的 92svh），
-   面板自己滚，滚到哪都点得到这一颗。
-   这条以前只开在矮屏（responsive.css 的 max-height: 720px）上——加了「生命」那一排
-   之后普通手机也得滚，所以挪到这里常开；矮屏那一份只留压尺寸的活。 */
-.look-sheet .sheet-done {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-  margin-top: 8px;
-  background: var(--bg-card);
-  box-shadow: 0 -12px 16px -10px rgba(58, 51, 53, .28);
-}
-
 .case { margin-top: 12px; }
 
 .case-head {

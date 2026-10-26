@@ -281,7 +281,8 @@ await page.evaluate(() => {
   document.querySelector('#pieceRow [data-piece="cat"]').click();
 });
 await sleep(260);
-await page.evaluate(() => { document.getElementById('btnLookDone').click(); });
+// 关掉外观面板（「知道了」没有了，走右上角的叉）
+await page.evaluate(() => { document.getElementById('btnCloseLook').click(); });
 await sleep(600);
 const other = await page.evaluate(() => {
   const x = document.querySelector('.cell.is-x');

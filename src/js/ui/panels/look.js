@@ -36,8 +36,9 @@ export var HTML = /* html */ `
         </svg>
       </button>
     </div>
-    <p class="sheet-note">色块的纹样、叉、皇后和命数各挑一样。选完立刻生效，自动打的标记也一起换。
-      每排的第一样开局就有，其余的挂在展柜里，抽到三枚一样的才解锁。</p>
+    <p class="sheet-note">外观从每日挑战的抽奖里解锁：完成一挡就能抽一次，
+      转到三枚一样的，就把那套外观收进展柜；两枚一样再多转一次。
+      每排的第一套是开局自带的，抽到的都在这里换。</p>
 
     <!-- 三排展柜：选项按钮由 src/js/looks/ 里登记的外观插件现场生成。
          一排里跨了多个插件时，展位左上角会挂一个插件名的小标签。 -->
@@ -62,8 +63,6 @@ export var HTML = /* html */ `
       <div class="case-head"><b>生命</b><span id="lifeNow">当前：红心</span></div>
       <div class="case-row" id="lifeRow" role="radiogroup" aria-label="生命的样式"></div>
     </div>
-
-    <button class="btn sheet-done" id="btnLookDone" type="button">知道了</button>
   </div>
 </div>`;
 
@@ -297,7 +296,6 @@ export function mount(host) {
 
   btnLook.addEventListener('click', openLook);
   document.getElementById('btnCloseLook').addEventListener('click', closeLook);
-  document.getElementById('btnLookDone').addEventListener('click', closeLook);
   lookBackdrop.addEventListener('click', closeLook);
 
   lookSheet.addEventListener('click', function (e) {
