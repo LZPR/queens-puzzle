@@ -108,8 +108,6 @@ export const view = {
   /* 正在出题（可能要抽好几秒，见 app/puzzle.js 的 SEARCH_MS）：棋盘同样只读，
    * 否则遮罩挡不住的键盘还能往旧盘上落子。applyBoard / 这一轮收手时复位。 */
   rolling: false,
-  // 翻格期间阻止棋盘输入；换盘或动画结束时清掉，不写入存档。
-  flipping: false,
   sheet: null,
   /* 已经画进 .piece 的皇后样式：外观面板只在真的换了样式时才重画一遍格子里的画 */
   lookPiece: '',

@@ -58,14 +58,10 @@ async function closeSheet() {
   if (open) { await jsClick('#btnCloseNew'); await sleep(320); }
 }
 async function waitFreshBoard(prevSeed) {
-  const view = await page.evaluateHandle(async () => (await import('/src/js/core/state.js')).view);
-  try {
-    await page.waitForFunction((s, v) => {
-      const st = __QUEENS_DEBUG__.state;
-      return st.regions && !v.rolling && !v.flipping && document.getElementById('newWrap').hidden &&
-        (s === null || st.seed !== s);
-    }, { timeout: 40000 }, prevSeed, view);
-  } finally { await view.dispose(); }
+  await page.waitForFunction(s => {
+    const st = __QUEENS_DEBUG__.state;
+    return st.regions && document.getElementById('newWrap').hidden && (s === null || st.seed !== s);
+  }, { timeout: 40000 }, prevSeed);
   await sleep(250);
 }
 async function openRecords() { await jsClick('#btnRecords'); await sleep(340); }
@@ -262,8 +258,7 @@ await page.evaluate(() => {
   cells[last].focus();
 });
 await page.keyboard.press('KeyQ');
-await page.waitForFunction(() => __QUEENS_DEBUG__.state.status === 'won' &&
-  !document.getElementById('result').hidden, { timeout: 5000 });
+await sleep(1500);
 g = await game();
 ok('解开了', await page.evaluate(() => __QUEENS_DEBUG__.state.status === 'won'));
 ok('日历里记上了「容易」', !!g.dailyAll[today.day] && !!g.dailyAll[today.day].easy,

@@ -3,6 +3,7 @@
  * 棋盘 DOM 构建与色块长按高亮。
  * ========================================================================== */
 
+import { REDUCE_MOTION } from '../core/config.js';
 import { gridEl, regionsEl, rlEl, rlPeek } from '../core/dom.js';
 import { REGION_COLORS, assignRegionColors, glowOf } from '../core/palette.js';
 import { settings, state, view } from '../core/state.js';
@@ -30,7 +31,7 @@ export function applyPieceStyle() {
 /* ==========================================================
    棋盘构建
    ========================================================== */
-export function buildBoard() {
+export function buildBoard(deal) {
   var n = state.size;
   endPeek();               // 换盘时把上局长按留下的高亮清掉
   gridEl.innerHTML = '';
@@ -59,6 +60,11 @@ export function buildBoard() {
       if (c === n - 1) cell.classList.add('edge-r');
       if (r === n - 1) cell.classList.add('edge-b');
 
+      if (deal && !REDUCE_MOTION) {
+        cell.classList.add('deal');
+        cell.style.setProperty('--deal-delay', ((r + c) * 13) + 'ms');
+      }
+
       // 图案层在最底下：底色之上、× 与皇后之下，纯装饰、不吃点击
       // （窗口与图形由 skin.js 按「整块一枚图形」算，这里只放个空壳）
       // .miss 是挑战「标错惩罚」的红 X：放错那一下拍上来，自己缩掉（见 ui/lives.js）
@@ -74,6 +80,12 @@ export function buildBoard() {
     }
   }
 
+  window.setTimeout(function () {
+    for (var k = 0; k < view.cells.length; k++) {
+      view.cells[k].classList.remove('deal');
+      view.cells[k].style.removeProperty('--deal-delay');
+    }
+  }, 620 + n * 30);
 }
 
 export function buildRegionBar() {

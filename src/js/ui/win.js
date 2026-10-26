@@ -16,7 +16,6 @@ import { save } from '../core/storage.js';
 import { announce, formatTime } from '../core/utils.js';
 import { queenCount, regionCounts } from '../game/rules.js';
 import { closeGuide } from './guide.js';
-import { revealReward } from './board-flip.js';
 import { updateHint } from './hint.js';
 import { showResult } from './panels/result.js';
 import { updateStats } from './render.js';
@@ -36,6 +35,8 @@ export function checkWin() {
   state.lostBy = null;
   if (guide.open) closeGuide();
   stopTimer();
+  sfx('win');
+  buzz([20, 40, 20, 40, 80]);
   updateStats();
   updateHint();
   announce('解开了！用时 ' + formatTime(state.elapsed) +
@@ -48,20 +49,15 @@ export function checkWin() {
     view.cells[i].style.setProperty('--win-delay', ((r + c) * 36) + 'ms');
   }
 
+  burstConfetti();
+
   save();
   recordFinish(true);
 
-  const marks = state.marks;
-  revealReward().then(function (completed) {
-    if (!completed || state.marks !== marks || state.status !== 'won' || view.rolling) return;
-    sfx('win');
-    buzz([20, 40, 20, 40, 80]);
-    burstConfetti();
-    window.setTimeout(function () {
-      if (state.marks !== marks || state.status !== 'won' || view.rolling) return;
-      showResult();
-    }, REDUCE_MOTION ? 200 : 1100);
-  });
+  window.setTimeout(function () {
+    if (state.status !== 'won') return;
+    showResult();
+  }, REDUCE_MOTION ? 200 : 900);
 }
 
 /* ==========================================================

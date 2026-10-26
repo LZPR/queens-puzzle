@@ -215,6 +215,17 @@
   to { stroke-dashoffset: -18; }
 }
 
+/* ---- 开局翻入 ---- */
+.cell.deal {
+  animation: dealIn .42s var(--spring) both;
+  animation-delay: var(--deal-delay, 0ms);
+}
+
+@keyframes dealIn {
+  from { opacity: 0; transform: scale(.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 /* ---- 胜利 ---- */
 .board.is-won .piece {
   animation: winHop .5s var(--spring-soft) both;

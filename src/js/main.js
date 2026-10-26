@@ -20,7 +20,6 @@ import { buildBoard, buildRegionBar } from './game/board.js';
 import { decodeShare, encodeShare } from './game/share-code.js';
 import { computeVibe } from './game/vibe.js';
 import { updateDiffChip } from './ui/difficulty.js';
-import { flipBoard, revealReward } from './ui/board-flip.js';
 import { applyFadeNow } from './ui/fade.js';
 import { closeGuide, guideNext, guidePrev, useHint } from './ui/guide.js';
 import { flashHint } from './ui/hint.js';
@@ -78,7 +77,7 @@ function boot() {
   } else if (restored) {
     state.diffApplied = settings.difficulty;   // 续玩的这局当作已按当前设置开出
     state.vibe = computeVibe(state.size, state.regions, state.solution);
-    buildBoard();
+    buildBoard(false);
     buildRegionBar();
     relayout();
     render();
@@ -89,14 +88,10 @@ function boot() {
     updateDiffChip();
 
     if (state.status === 'won') {
-      revealReward(false);
       showResult();
-    } else {
-      flipBoard(null);
-      if (hasProgress()) {
-        state.runningSince = 0;
-        startTimer();
-      }
+    } else if (hasProgress()) {
+      state.runningSince = 0;
+      startTimer();
     }
     announce('已恢复上一局：' + state.size + '×' + state.size);
   } else {
