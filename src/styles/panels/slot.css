@@ -1,6 +1,7 @@
 /* panels/slot.css — 幸运抽奖（老虎机），视觉沿用 tokens.css 那套：
-   奶油纸底 + 墨线描边 + 硬投影 + 弹性曲线。来自 prototype/slot-machine.html。
-   类名全部挂 slot- 前缀；confetti 礼花复用 result.css 里的全局画法。 */
+   奶油纸底 + 墨线描边 + 硬投影 + 弹性曲线。出自原型 slot-machine.html
+   （原型已清理，git 历史可查）。类名全部挂 slot- 前缀；
+   confetti 礼花复用 result.css 里的全局画法。 */
 
 /* --pull：0 = 收着，1 = 拉到底。注册成 <number> 才能被 transition 插值——
    杆子角度、轨道上的进度弧都读它，一次 transition 一起带动。 */
