@@ -33,19 +33,6 @@ html[data-piece="cat"] .piece svg { filter: none; }
    ============================================================ */
 .look-sheet { padding-top: 14px; }
 
-/* 「知道了」钉在面板下沿：四排展柜加起来在 390×844 上已经超过一屏（.sheet 的 92svh），
-   面板自己滚，滚到哪都点得到这一颗。
-   这条以前只开在矮屏（responsive.css 的 max-height: 720px）上——加了「生命」那一排
-   之后普通手机也得滚，所以挪到这里常开；矮屏那一份只留压尺寸的活。 */
-.look-sheet .sheet-done {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-  margin-top: 8px;
-  background: var(--bg-card);
-  box-shadow: 0 -12px 16px -10px rgba(58, 51, 53, .28);
-}
-
 .case { margin-top: 12px; }
 
 .case-head {
@@ -284,3 +271,45 @@ html[data-piece="cat"] .piece svg { filter: none; }
 @media (prefers-reduced-motion: reduce) {
   .sc-tick { transition-duration: .01s; }
 }
+
+/* ---- 锁着的展位 ----
+   还没抽到的那几套照摆（让人知道有这套），但台子里的摆件与台面整柜褪色、
+   名牌蒙灰，玻璃罩右下角一枚小锁。锁必须是鲜的：灰成一片就找不着了。 */
+.showcase.is-locked { cursor: not-allowed; }
+
+.showcase.is-locked .sc-item,
+.showcase.is-locked .sc-plinth,
+.showcase.is-locked .sc-lamp {
+  filter: grayscale(.92);
+  opacity: .55;
+}
+
+.showcase.is-locked .sc-plate {
+  opacity: .62;
+  box-shadow: 0 2px 0 rgba(58, 51, 53, .35);
+  border-color: rgba(58, 51, 53, .45);
+}
+
+.showcase.is-locked .sc-plate b { color: var(--ink-mute); }
+
+/* 玻璃罩右下角那枚小锁：白底墨框，压在反光上面。
+ * 徽章是建展位时烙进 markup 的，解锁不用重建 DOM——不是锁定态就藏起来。 */
+.sc-lock {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 7px;
+  background: var(--bg-card);
+  color: var(--ink);
+  box-shadow: 0 1.5px 0 var(--ink);
+  pointer-events: none;
+}
+
+.showcase:not(.is-locked) .sc-lock { display: none; }
+
+.sc-lock svg { width: 12px; height: 12px; display: block; }

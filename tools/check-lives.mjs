@@ -385,11 +385,9 @@ const lookUi = await page.evaluate(() => {
     // 四排都在（生命是最后一排）
     cases: sh.querySelectorAll('.case').length,
     attr: document.documentElement.getAttribute('data-life'),
-    done: getComputedStyle(sh.querySelector('.sheet-done')).position,
-    // 内容超过一屏时可以滚，但「知道了」钉在面板下沿
-    scrolls: sh.scrollHeight > sh.clientHeight + 4,
-    doneBottom: Math.round(sh.querySelector('.sheet-done').getBoundingClientRect().bottom),
-    sheetBottom: Math.round(sh.getBoundingClientRect().bottom)
+    // 没有「知道了」按钮；内容超过一屏时面板自己滚
+    doneBtn: !!sh.querySelector('.sheet-done'),
+    scrolls: sh.scrollHeight > sh.clientHeight + 4
   };
 });
 ok('外观面板里有「生命」这一排：红心 / 血条',
@@ -398,9 +396,8 @@ ok('外观面板里有「生命」这一排：红心 / 血条',
 ok('这一排有四个展柜组', lookUi.cases === 4, lookUi.cases);
 ok('两个摆件都有画', lookUi.svgs === 2, lookUi.svgs);
 ok('默认是红心', lookUi.attr === 'heart' && /红心/.test(lookUi.now), lookUi.now);
-ok('「知道了」钉在面板下沿（内容超一屏也点得到）',
-  lookUi.done === 'sticky' && lookUi.doneBottom <= lookUi.sheetBottom + 1,
-  `${lookUi.done}/${lookUi.doneBottom}/${lookUi.sheetBottom}`);
+ok('没有「知道了」按钮，内容超一屏自己滚',
+  lookUi.doneBtn === false && lookUi.scrolls, `done=${lookUi.doneBtn} scrolls=${lookUi.scrolls}`);
 await page.screenshot({ path: SHOTS + 'l5-look.png' });
 
 // 先造一局带惩罚的盘，才看得出血条（命数那一排默认是藏着的）
@@ -413,6 +410,8 @@ const s3 = await snap();
 await shuffle(s3.seed);
 await page.click('#btnLook');
 await sleep(420);
+// 血条是锁着的外观，测试要用先解锁（探针顺带刷新展柜的锁）
+await page.evaluate(() => { __QUEENS_DEBUG__.lookUnlock('life', 'bar'); });
 await page.evaluate(() => document.querySelector('#lifeRow [data-life="bar"]').click());
 await sleep(300);
 const bar = await page.evaluate(() => {

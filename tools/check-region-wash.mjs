@@ -56,6 +56,8 @@ await boot();
 
 async function pickSurface(id) {
   await page.evaluate(i => {
+    // 色块的非默认套现在都锁着，测试要遍历就先全解开
+    __QUEENS_DEBUG__.lookUnlockAll();
     __QUEENS_DEBUG__.openLook();
     document.querySelector(`#surfaceRow .showcase[data-surface="${i}"]`).click();
     __QUEENS_DEBUG__.closeLook();

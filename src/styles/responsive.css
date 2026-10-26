@@ -65,7 +65,7 @@
 }
 
 /* 矮屏上的外观面板：四排展柜加起来太高，罩子压矮一点、名牌收窄，
-   少滚一屏是一屏（「知道了」早就钉在面板下沿了，见 panels/look.css）。
+   少滚一屏是一屏。
    色块那排在 panels/look.css 里是用 id 选择器定尺寸的，这里必须带上同样的
    #surfaceRow 前缀才压得动——光写 .sc-case 会被 specificity 挡回去。 */
 @media (max-height: 720px) {

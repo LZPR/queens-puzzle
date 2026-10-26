@@ -36,5 +36,6 @@
 
 @import url("./panels/records.css");
 @import url("./panels/look.css");
+@import url("./panels/slot.css");
 
 @import url("./responsive.css");

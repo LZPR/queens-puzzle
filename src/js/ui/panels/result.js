@@ -13,7 +13,6 @@
  * ========================================================================== */
 
 import { newGame, retryGame } from '../../app/puzzle.js';
-import { openNewDaily } from './newgame.js';
 import { limitLabel } from '../../core/config.js';
 import { boardEl } from '../../core/dom.js';
 import { createSheet } from '../../core/sheet.js';
@@ -21,6 +20,8 @@ import { state, view } from '../../core/state.js';
 import { formatTime } from '../../core/utils.js';
 import { queenCount } from '../../game/rules.js';
 import { updateStats } from '../render.js';
+import { openNewDaily } from './newgame.js';
+import { openSlot } from './slot.js';
 
 export var HTML = /* html */ `
 <div class="result" id="result" hidden>
@@ -33,6 +34,7 @@ export var HTML = /* html */ `
       <div class="result-stat"><b id="resTime">00:00</b><span id="resTimeLbl">用时</span></div>
       <div class="result-stat"><b id="resHints">0</b><span>提示</span></div>
     </div>
+    <button class="btn btn-lucky" id="btnDraw" type="button" hidden>抽一次奖</button>
     <button class="btn btn-hint" id="btnAgain" type="button">再来一局</button>
     <div class="result-links">
       <button class="btn-text" id="btnReplay" type="button">重来这局</button>
@@ -44,7 +46,7 @@ export var HTML = /* html */ `
 var el = null;
 var resultKicker = null, resultTitle = null, resultSub = null;
 var resSize = null, resTime = null, resTimeLbl = null, resHints = null;
-var btnAgain = null, btnReplay = null, btnPeek = null;
+var btnAgain = null, btnReplay = null, btnPeek = null, btnDraw = null;
 
 var sheet = null;
 
@@ -54,6 +56,13 @@ function rankText() {
   var f = view.lastFinish;
   if (!f || !f.rank) return '';
   return f.rank === 1 ? ' · 本组最快' : ' · 本组第 ' + f.rank;
+}
+
+/* 抽奖资格：这一局是每日挑战、解开了，而且是这一挡今天「头一回」解开——
+ * 起局时记下的快照（state.dailyFresh，解开那一刻 isDone 已经翻成 true）。
+ * 资格不落账：老虎机一弹出就算用掉（view.drawUsed），关掉或者错过都不补。 */
+function drawOffered() {
+  return state.status === 'won' && !!state.daily && !!state.dailyFresh && !view.drawUsed;
 }
 
 /* 打开前把这一局的读数写进卡片。who 由 state.status 决定，调用方不用传；
@@ -107,6 +116,8 @@ function paint() {
   btnPeek.textContent = lost ? '换一局新的' : '看看棋盘';
   // 「重来这局」只在解开后露面：输掉的那屏第一个按钮就是重试同一盘，不必再给一个
   btnReplay.hidden = lost;
+  /* 首通某一挡的每日挑战才有的抽奖按钮（资格用过即没，见 drawOffered） */
+  btnDraw.hidden = !drawOffered();
 }
 
 export function showResult() {
@@ -148,6 +159,7 @@ export function mount(host) {
   btnAgain = document.getElementById('btnAgain');
   btnReplay = document.getElementById('btnReplay');
   btnPeek = document.getElementById('btnPeek');
+  btnDraw = document.getElementById('btnDraw');
 
   sheet = createSheet({
     id: 'result',
@@ -177,6 +189,8 @@ export function mount(host) {
     sheet.close({ force: true });
     if (lost) retryGame(); else nextGame();
   });
+  /* 抽一次奖：开老虎机面板（浮层基座会把结算层收掉，抽完再回来） */
+  btnDraw.addEventListener('click', function () { openSlot(); });
   /* 重来这局：同一盘棋从零再下一遍（解开后才会露出来）。
    * 输了那一屏的主按钮本来就是「重试这一局」，这里就不重复了。 */
   btnReplay.addEventListener('click', function () {

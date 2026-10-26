@@ -14,6 +14,8 @@ import { guide, hasProgress, settings, state, view } from './core/state.js';
 import { doSave, loadGame, loadSettings } from './core/storage.js';
 import * as daily from './core/daily.js';
 import * as records from './core/records.js';
+import { clear as clearLooks, snapshot as looksSnapshot, unlockAll as unlockAllLooks,
+  unlock as unlockLook } from './core/unlock.js';
 import { closeTopSheet } from './core/sheet.js';
 import { announce } from './core/utils.js';
 import { buildBoard, buildRegionBar } from './game/board.js';
@@ -29,6 +31,7 @@ import { closeDiff, openDiff, tick as infoTick } from './ui/panels/info.js';
 import { applyLook, closeLook, openLook } from './ui/panels/look.js';
 import { closeRecords, openRecords } from './ui/panels/records.js';
 import { showResult } from './ui/panels/result.js';
+import { openSlot, maybeOpenFromUrl, slotProbe } from './ui/panels/slot.js';
 import { render, updateStats } from './ui/render.js';
 import { takeHashCode, tryLoadShare } from './ui/share.js';
 import { traceCells } from './ui/trace.js';
@@ -124,6 +127,9 @@ function boot() {
   checkLives();
   paintClock();
 
+  /* ?slot=easy|mid|hard|extreme：开机直接开抽奖面板测试（抽了不记账） */
+  maybeOpenFromUrl();
+
   window.addEventListener('beforeunload', function () {
     pauseTimer();
     doSave();
@@ -207,6 +213,10 @@ window.__QUEENS_DEBUG__ = {
   dailyMark: daily.mark,
   dailyClear: daily.clear,
   startDaily: newDaily,
+  // 抽奖：老虎机探针（见 tools/check-slot.mjs）。资格不记账——
+  // 弹出即用掉（view.drawUsed），没有「抽没抽过」的存档
+  slot: slotProbe,
+  openSlot: openSlot,
   // 外观：面板开关 + 当前样式，只给 tools/ 里的自动化测试用
   look: function () {
     return {
@@ -216,6 +226,12 @@ window.__QUEENS_DEBUG__ = {
       life: settings.lifeStyle
     };
   },
+  // 外观解锁账本：解锁一套 / 全解开 / 清空 / 快照，只给 tools/ 里的自动化测试用。
+  // 解开的同时把外观面板的锁同步掉（applyLook 顺带 syncLook），测试不用先关再开面板
+  lookUnlock: function (kind, id) { var r = unlockLook(kind, id); if (r) applyLook(); return r; },
+  lookUnlockAll: function () { if (unlockAllLooks()) applyLook(); },
+  lookClear: function () { clearLooks(); applyLook(); },
+  lookUnlocked: looksSnapshot,
   openLook: openLook,
   closeLook: closeLook
 };

@@ -21,6 +21,7 @@ import { saveSettings } from '../../core/storage.js';
 import { announce } from '../../core/utils.js';
 import { applyPieceStyle } from '../../game/board.js';
 import { applySurface, surfaceInk } from '../../game/skin.js';
+import { isUnlocked } from '../../core/unlock.js';
 import { DEFAULT_LOOK, KIND, KINDS, groupsOf, styleId, styleName } from '../../looks/index.js';
 
 export var HTML = /* html */ `
@@ -35,7 +36,9 @@ export var HTML = /* html */ `
         </svg>
       </button>
     </div>
-    <p class="sheet-note">色块的纹样、叉、皇后和命数各挑一样。选完立刻生效，自动打的标记也一起换。</p>
+    <p class="sheet-note">外观从每日挑战的抽奖里解锁：完成一挡就能抽一次，
+      转到三枚一样的，就把那套外观收进展柜；两枚一样再多转一次。
+      每排的第一套是开局自带的，抽到的都在这里换。</p>
 
     <!-- 三排展柜：选项按钮由 src/js/looks/ 里登记的外观插件现场生成。
          一排里跨了多个插件时，展位左上角会挂一个插件名的小标签。 -->
@@ -60,8 +63,6 @@ export var HTML = /* html */ `
       <div class="case-head"><b>生命</b><span id="lifeNow">当前：红心</span></div>
       <div class="case-row" id="lifeRow" role="radiogroup" aria-label="生命的样式"></div>
     </div>
-
-    <button class="btn sheet-done" id="btnLookDone" type="button">知道了</button>
   </div>
 </div>`;
 
@@ -81,6 +82,13 @@ var ROW_ELS = null;
 var TICK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
   '<path d="M6.4 12.6l3.6 3.6 7.6-8" fill="none" stroke="currentColor" stroke-width="3.6" ' +
   'stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
+
+/* 锁着的那几套在玻璃罩右下角挂一枚小锁：没解锁的就是没到手，别让人点半天没反应 */
+var LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<rect x="4.6" y="10.4" width="14.8" height="10" rx="2.4" fill="currentColor"/>' +
+  '<path d="M8 10.4V7.6a4 4 0 0 1 8 0v2.8" fill="none" stroke="currentColor" stroke-width="2.6"/>' +
+  '<circle cx="12" cy="15.2" r="1.7" fill="#fff"/>' +
   '</svg>';
 
 /* 色块图案的预览挑这四枚：图形彼此差得远，2×2 摆开一眼能看出这套花样是什么脾气 */
@@ -126,13 +134,16 @@ function preview(kind, o) {
 }
 
 /* 一个展位：上面是罩在玻璃里的台子，下面是名牌（只写名字，不加描述）。
- * src 只有在这一排跨了多个插件时才给：一个插件的东西不用自己标自己。 */
-function slotHtml(kind, o, src) {
+ * src 只有在这一排跨了多个插件时才给：一个插件的东西不用自己标自己。
+ * 锁着的套挂在展位上照摆（让人知道有这么一套），但整柜褪色、名牌蒙灰，
+ * 玻璃罩右下角一枚小锁——名字亮着不给选。 */
+function slotHtml(kind, o, src, locked) {
   return '<span class="sc-case" aria-hidden="true">' +
       '<span class="sc-lamp"></span>' +
       '<span class="sc-item">' + preview(kind, o) + '</span>' +
       '<span class="sc-plinth"></span>' +
       '<span class="sc-glass"></span>' +
+      (locked ? '<span class="sc-lock">' + LOCK_SVG + '</span>' : '') +
       (src ? '<span class="sc-src">' + src + '</span>' : '') +
     '</span>' +
     '<span class="sc-plate"><b>' + o.name + '</b></span>' +
@@ -162,8 +173,10 @@ function buildCase(kind) {
        * 而这套的名字又跟插件不一样（比如「纯色」出自「墨线」）。
        * 几何 / 自然 / 天空 / 贴纸 是一套一个插件，名字本来就是它，再标一遍是废话。 */
       var src = multi && o.pluginName !== o.name ? o.pluginName : '';
-      b.title = (src ? src + ' · ' : '') + o.name + (o.desc ? '：' + o.desc : '');
-      b.innerHTML = slotHtml(kind, o, src);
+      var locked = !isUnlocked(kind, o.id);
+      b.title = (src ? src + ' · ' : '') + o.name + (o.desc ? '：' + o.desc : '') +
+        (locked ? '（还没解锁：抽奖抽到三枚一样的才开）' : '');
+      b.innerHTML = slotHtml(kind, o, src, locked);
       host.appendChild(b);
     }
   }
@@ -196,7 +209,13 @@ export function syncLook() {
     var id = settings[KIND[kind].key];
     var btns = els.row ? els.row.querySelectorAll('.showcase') : [];
     for (var i = 0; i < btns.length; i++) {
-      var on = btns[i].dataset[kind] === id;
+      var bid = btns[i].dataset[kind];
+      /* 锁是活的：抽奖解开了新套，展柜这边下次同步就把小锁摘掉。
+       * aria-disabled 跟着走——读屏也知道这一格现在按了没用。 */
+      var locked = !isUnlocked(kind, bid);
+      btns[i].classList.toggle('is-locked', locked);
+      btns[i].setAttribute('aria-disabled', locked ? 'true' : 'false');
+      var on = bid === id;
       btns[i].classList.toggle('is-on', on);
       btns[i].setAttribute('aria-checked', on ? 'true' : 'false');
     }
@@ -219,6 +238,12 @@ export function pickLook(kind, id) {
   if (!KIND[kind]) return;
   var key = KIND[kind].key;
   id = styleId(kind, id);
+  /* 锁着的展位点不出声色：响一下、报一句，别让玩家以为按钮坏了 */
+  if (!isUnlocked(kind, id)) {
+    buzz(8);
+    announce('「' + styleName(kind, id) + '」还没解锁：去每日挑战抽奖，抽到三枚一样的才开');
+    return;
+  }
   if (settings[key] === id) return;
   settings[key] = id;
   saveSettings();
@@ -271,7 +296,6 @@ export function mount(host) {
 
   btnLook.addEventListener('click', openLook);
   document.getElementById('btnCloseLook').addEventListener('click', closeLook);
-  document.getElementById('btnLookDone').addEventListener('click', closeLook);
   lookBackdrop.addEventListener('click', closeLook);
 
   lookSheet.addEventListener('click', function (e) {
