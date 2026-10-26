@@ -1,0 +1,574 @@
+/* panels/slot.css — 幸运抽奖（老虎机），视觉沿用 tokens.css 那套：
+   奶油纸底 + 墨线描边 + 硬投影 + 弹性曲线。来自 prototype/slot-machine.html。
+   类名全部挂 slot- 前缀；confetti 礼花复用 result.css 里的全局画法。 */
+
+/* --pull：0 = 收着，1 = 拉到底。注册成 <number> 才能被 transition 插值——
+   杆子角度、轨道上的进度弧都读它，一次 transition 一起带动。 */
+@property --pull {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* ============================================================
+   0. 外壳：整屏盖住的一张卡（跟 result 一个路数）
+   ============================================================ */
+.slot {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  /* 不用 backdrop-filter：转轮每一帧都在动，遮罩就得每帧把背后的
+     整个页面重新模糊一遍，低帧数就是这么来的。底色加浓一档补回观感。 */
+  background: rgba(254, 243, 226, .9);
+  animation: fadeIn .2s ease both;
+
+  /* 机身与拉杆的尺寸：全部由这两个量推出来，改一个整台机器跟着变 */
+  --slot-cell: clamp(60px, 16vw, 80px);      /* 单格符号高度；窗口 = 3 格 */
+  --slot-lever-col: clamp(88px, 25vw, 116px);/* 拉杆那一列的宽 */
+  --slot-lever-len: calc(var(--slot-lever-col) - 14px);
+  --slot-knob: clamp(36px, 10.4vw, 44px);
+
+  /* 拉杆角度（单位 deg，写进 calc 所以不带单位）与轴心高度 */
+  --slot-rest: 18;
+  --slot-full: 58;
+  --slot-pivot-y: 26px;
+}
+
+.slot-card {
+  width: min(430px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 16px 16px 14px;
+  background: var(--bg-card);
+  border: 2px solid var(--ink);
+  border-radius: 20px;
+  box-shadow: 0 6px 0 var(--ink);
+  animation: popIn .34s var(--spring) both;
+}
+
+.slot-card::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* ---------- 头部 ---------- */
+.slot-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.slot-kicker {
+  margin: 0 0 1px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2.2px;
+  color: var(--ink-faint);
+}
+
+.slot-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: .5px;
+  line-height: 1.1;
+}
+
+.slot-note {
+  margin: 4px 0 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-mute);
+}
+
+/* ============================================================
+   1. 机身 + 拉杆
+   ============================================================ */
+.slot-stage {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.slot-machine { flex: 1 1 auto; min-width: 0; }
+
+.slot-machine.is-kick { animation: slotKick .34s ease-out; }
+
+@keyframes slotKick {
+  0%   { transform: translateY(0) rotate(0); }
+  20%  { transform: translateY(4px) rotate(-.6deg); }
+  58%  { transform: translateY(-1px) rotate(.35deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+
+/* ---------- 柜体 ---------- */
+.slot-cab {
+  position: relative;
+  padding: 8px 8px 0;
+  border: 3px solid var(--ink);
+  border-radius: 24px;
+  background: linear-gradient(180deg, #FFF9EC 0%, #FFEED3 62%, #FFE3BE 100%);
+  box-shadow: 0 7px 0 var(--ink), 0 16px 26px -12px rgba(58,51,53,.45);
+}
+
+/* 顶部那道高光，让柜面看起来是漆过的 */
+.slot-cab::before {
+  content: "";
+  position: absolute;
+  inset: 3px 3px auto;
+  height: 42%;
+  border-radius: 21px 21px 60% 60% / 21px 21px 34px 34px;
+  background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,0));
+  pointer-events: none;
+}
+
+/* ---------- 跑马灯（上下各一排小圆点） ---------- */
+.slot-marquee {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 4px 6px;
+}
+
+.slot-marquee i {
+  flex: 1 1 auto;
+  max-width: 9px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1.5px rgba(58,51,53,.55);
+  opacity: .35;
+  animation: slotBulb 1.9s linear infinite;
+  animation-delay: calc(var(--i) * -0.19s);
+}
+
+.slot.is-spinning .slot-marquee i { animation-duration: .42s; }
+
+@keyframes slotBulb {
+  0%, 40% { opacity: .28; }
+  55%, 90% { opacity: 1; }
+  100% { opacity: .28; }
+}
+
+/* ---------- 转轮窗口 ---------- */
+.slot-window {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: #2C2628;
+  box-shadow:
+    inset 0 8px 16px -6px rgba(0,0,0,.7),
+    inset 0 -8px 16px -6px rgba(0,0,0,.55);
+}
+
+.slot-reel {
+  position: relative;
+  height: calc(var(--slot-cell) * 3);
+  overflow: hidden;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #EFE0C8 0%, #FFFCF4 26%, #FFFCF4 74%, #EBDABF 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(58,51,53,.16);
+  /* 上下两头淡出，模拟鼓面卷进轴里的感觉 */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 13%, #000 87%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 13%, #000 87%, transparent 100%);
+  transition: box-shadow .18s ease;
+}
+
+.slot-reel.is-hit {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 22px rgba(255,217,61,.75),
+    inset 0 0 0 1.5px rgba(58,51,53,.16);
+  animation: slotHitPop .42s var(--spring);
+}
+
+@keyframes slotHitPop {
+  0%   { transform: scaleY(1); }
+  35%  { transform: scaleY(1.05); }
+  100% { transform: scaleY(1); }
+}
+
+.slot-strip {
+  display: block;
+  will-change: transform;
+}
+
+.slot-sym {
+  display: grid;
+  place-items: center;
+  height: var(--slot-cell);
+}
+
+.slot-sym svg {
+  width: 62%;
+  height: 62%;
+  overflow: visible;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 中奖那条线上的符号描粗一点，隔着屏幕也能看出是哪三个 */
+.slot-reel.is-hit .slot-sym svg { stroke-width: 2.2; }
+
+/* 中奖线：套住中间那一格 */
+.slot-payline {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: calc(8px + var(--slot-cell));
+  height: var(--slot-cell);
+  border-radius: 9px;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px rgba(255,217,61,.9),
+    inset 0 0 14px rgba(255,217,61,.28),
+    0 0 16px rgba(255,217,61,.32);
+  opacity: .55;
+  transition: opacity .2s ease;
+}
+
+.slot.is-spinning .slot-payline { opacity: .22; }
+
+/* ---------- 柜脚铭牌 ---------- */
+.slot-cab-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 0 9px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 2.6px;
+  color: var(--ink-faint);
+}
+
+.slot-cab-foot .slot-pull-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ink-mute);
+  animation: slotNudge 1.6s ease-in-out infinite;
+}
+
+@keyframes slotNudge {
+  0%, 100% { transform: translateY(0); opacity: .5; }
+  50% { transform: translateY(2px); opacity: 1; }
+}
+
+/* ============================================================
+   2. 拉杆
+   ============================================================ */
+.slot-lever {
+  position: relative;
+  flex: 0 0 var(--slot-lever-col);
+  width: var(--slot-lever-col);
+  height: 196px;
+  --pull: 0;
+}
+
+/* 回弹交给 transition；拖动的时候关掉，否则指针跟不上 */
+.slot-lever.is-free { transition: --pull .62s var(--spring-soft); }
+.slot-lever.is-slam { transition: --pull .1s cubic-bezier(.4, 0, .9, .6); }
+.slot-lever.is-drag { transition: none; }
+
+/* 轨道：一条从「收着」到「拉到底」的弧。
+   底圈是灰的虚线，上面叠一条 pathLength=1 的黄弧，靠 --pull 拉 dashoffset 吃进度 */
+.slot-lever-track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.slot-lever-track path {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.slot-track-base {
+  stroke: var(--hair);
+  stroke-width: 2.5;
+  stroke-dasharray: 4 5.5;
+}
+
+.slot-track-on {
+  stroke: var(--accent);
+  stroke-width: 3.5;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--pull));
+  /* dashoffset 走满时线尾的圆头还会剩一个小点，用透明度把它收掉。
+     别给这条弧挂 drop-shadow 一类的滤镜：--pull 一动它就整条重画，
+     拖杆期间每帧一次，白烧。 */
+  opacity: clamp(0, calc(var(--pull) * 14), 1);
+}
+
+/* 轴座：骑在机身右边缘上，压在杆子上面（杆子像是插进去的） */
+.slot-lever-hinge {
+  position: absolute;
+  left: -15px;
+  bottom: calc(var(--slot-pivot-y) - 15px);
+  width: 34px;
+  height: 34px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 28%, #F6EEE0 0%, #CFC1AC 58%, #9C8D79 100%);
+  box-shadow: 0 3px 0 var(--ink), inset 0 2px 2px rgba(255,255,255,.65);
+  z-index: 3;
+}
+
+.slot-lever-hinge::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.4);
+}
+
+.slot-lever-arm {
+  position: absolute;
+  left: 0;
+  bottom: var(--slot-pivot-y);
+  width: 0;
+  height: var(--slot-lever-len);
+  transform-origin: 0 100%;
+  transform: rotate(calc((var(--slot-rest) + var(--pull) * (var(--slot-full) - var(--slot-rest))) * 1deg));
+  z-index: 2;
+}
+
+.slot-lever-rod {
+  position: absolute;
+  left: -7px;
+  bottom: 0;
+  width: 14px;
+  height: 100%;
+  border: 2.5px solid var(--ink);
+  border-radius: 7px;
+  background: linear-gradient(90deg, #FFFDF7 0%, #E8DCC9 45%, #B9AB97 100%);
+  box-shadow: 0 2px 0 rgba(58,51,53,.35);
+}
+
+.slot-lever-knob {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--slot-knob);
+  height: var(--slot-knob);
+  margin-left: calc(var(--slot-knob) / -2);
+  margin-top: calc(var(--slot-knob) / -2);
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, #FFF2B8 0%, var(--accent) 42%, #E7A526 100%);
+  box-shadow:
+    0 3px 0 var(--ink),
+    inset 0 2px 5px rgba(255,255,255,.75),
+    inset 0 -3px 6px rgba(146,89,8,.35);
+  cursor: grab;
+  touch-action: none;
+  transition: transform .12s var(--spring), box-shadow .12s ease;
+}
+
+.slot-lever-knob::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34%;
+  height: 34%;
+  margin: -17% 0 0 -17%;
+  border-radius: 50%;
+  border: 2px solid rgba(58,51,53,.45);
+}
+
+.slot-lever.is-drag .slot-lever-knob {
+  cursor: grabbing;
+  transform: scale(1.06);
+  box-shadow:
+    0 1px 0 var(--ink),
+    inset 0 2px 5px rgba(255,255,255,.75),
+    inset 0 -3px 6px rgba(146,89,8,.35),
+    0 0 0 6px rgba(255,217,61,.22);
+}
+
+.slot-lever-knob:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* ============================================================
+   3. 奖品条
+   ============================================================ */
+.slot-prize {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 13px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: var(--bg-card);
+  box-shadow: 0 4px 0 var(--ink);
+  transition: background .2s ease, box-shadow .2s ease;
+}
+
+.slot-prize-ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--bg-body);
+  color: var(--ink);
+}
+
+.slot-prize-ico svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.slot-prize-txt { min-width: 0; }
+
+.slot-prize-txt b {
+  display: block;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: .3px;
+  line-height: 1.25;
+}
+
+.slot-prize-txt span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  line-height: 1.3;
+}
+
+/* 谢谢参与：整条退成灰底 */
+.slot-prize[data-tone="lose"] .slot-prize-ico { background: var(--bg-neutral); color: var(--ink-faint); }
+.slot-prize[data-tone="lose"] .slot-prize-txt b { color: var(--ink-mute); }
+
+/* 转动中：图标位置放一撮点 */
+.slot-prize[data-tone="spinning"] .slot-prize-ico { background: var(--bg-neutral); }
+
+.slot-dots { display: flex; gap: 3px; }
+
+.slot-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  animation: slotDot 1s ease-in-out infinite;
+}
+
+.slot-dots i:nth-child(2) { animation-delay: .12s; }
+.slot-dots i:nth-child(3) { animation-delay: .24s; }
+
+@keyframes slotDot {
+  0%, 100% { opacity: .25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* 中奖：黄底 + 外圈光晕 + 弹一下 */
+.slot-prize[data-tone="prize"] {
+  background: linear-gradient(180deg, #FFF7D6, var(--accent-soft));
+  box-shadow: 0 4px 0 var(--ink), 0 0 0 3px rgba(255,217,61,.45);
+  animation: slotPrizePop .46s var(--spring);
+}
+
+.slot-prize[data-tone="prize"] .slot-prize-ico {
+  background: var(--accent);
+  border-color: var(--ink);
+}
+
+/* 半份奖（中两个）：只是浅黄，不发光——别跟「三个一样」抢同一档情绪 */
+.slot-prize[data-tone="half"] {
+  background: linear-gradient(180deg, #FFFDF3, #FFF6DE);
+  animation: slotPrizePop .4s var(--spring);
+}
+
+.slot-prize[data-tone="half"] .slot-prize-ico {
+  background: var(--accent-soft);
+  border-color: var(--ink);
+}
+
+@keyframes slotPrizePop {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+
+/* 大奖：整条描金 */
+.slot-prize[data-tone="legend"] {
+  background: linear-gradient(180deg, #FFF3B0, #FFD93D);
+  box-shadow: 0 4px 0 var(--ink), 0 0 0 3px rgba(255,217,61,.75), 0 0 26px rgba(255,217,61,.6);
+  animation: slotPrizePop .5s var(--spring);
+}
+
+.slot-prize[data-tone="legend"] .slot-prize-ico {
+  background: var(--ink);
+  color: var(--accent);
+  border-color: var(--ink);
+  animation: slotSpinOnce .5s var(--spring);
+}
+
+@keyframes slotSpinOnce {
+  0% { transform: rotate(-14deg) scale(.8); }
+  100% { transform: rotate(0) scale(1); }
+}
+
+/* ---------- 收下 ---------- */
+.slot-card .sheet-done { margin-top: 12px; }
+
+/* ============================================================
+   4. 结算界面那颗抽奖入口（放在这里：它属于抽奖这件事）
+   ============================================================ */
+.btn-lucky {
+  background: linear-gradient(180deg, #FFF7D6, var(--accent));
+  margin-bottom: 10px;
+}
+
+/* ============================================================
+   5. 窄屏 / 矮屏 / 减动效
+   ============================================================ */
+@media (max-width: 359px) {
+  .slot { --slot-cell: 56px; --slot-lever-col: 82px; }
+  .slot-title { font-size: 19px; }
+}
+
+@media (max-height: 700px) {
+  .slot-lever { height: 176px; }
+  .slot { padding-top: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot-marquee i,
+  .slot-cab-foot .slot-pull-tip,
+  .slot-dots i { animation: none; }
+  .slot-machine.is-kick { animation: none; }
+}

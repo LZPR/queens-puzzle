@@ -170,6 +170,46 @@ export function sfx(name, detail) {
       audio.tone('triangle', 392, 330, 0.16, 0, 0.26);
       audio.tone('sine', 262, 175, 0.34, 0.12, 0.3);
       break;
+
+    /* ---- 老虎机（ui/panels/slot.js）：跟原型同一套配方，走这里的统一开关 ---- */
+    case 'slotTick':
+      // 转轮滚过一格的「嗒」：越到后面间隔越长（间隔在 slot.js 里按缓动算）
+      audio.tone('square', 1280, 620, 0.035, 0, 0.09);
+      break;
+    case 'slotClack':
+      // 拉杆砸到底那一下
+      audio.tone('square', 320, 110, 0.07, 0, 0.26);
+      audio.tone('sine', 96, 48, 0.17, 0, 0.4);
+      break;
+    case 'slotThunk':
+      // 一轮停稳：闷响 + 一点金属余音
+      audio.tone('sine', 170, 54, 0.2, 0, 0.52);
+      audio.tone('square', 460, 190, 0.05, 0, 0.14);
+      break;
+    case 'slotNope':
+      // 拉了一半松手：杆子弹回去，不给抽
+      audio.tone('square', 190, 120, 0.11, 0, 0.18);
+      break;
+    case 'slotLose':
+      audio.tone('sine', 330, 210, 0.3, 0, 0.2);
+      break;
+    case 'slotSmall':
+      // 两个一样：半份奖，短促两声
+      audio.tone('triangle', 659, 659, 0.2, 0, 0.26);
+      audio.tone('triangle', 880, 880, 0.2, 0.08, 0.26);
+      break;
+    case 'slotWin':
+      // 三个一样：一小串上行琶音
+      [523.25, 659.25, 783.99, 1046.5].forEach(function (f, i) {
+        audio.tone('triangle', f, f, 0.26, i * 0.085, 0.3);
+      });
+      break;
+    case 'slotBig':
+      // 传说档：琶音再多一级，音再长一点
+      [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach(function (f, i) {
+        audio.tone('triangle', f, f, 0.38, i * 0.085, 0.32);
+      });
+      break;
     default:
       break;
   }

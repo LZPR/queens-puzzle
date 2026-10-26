@@ -13,6 +13,7 @@ import { hintEl, sheetsHost, stage } from './core/dom.js';
 import { guide, hasProgress, settings, state, view } from './core/state.js';
 import { doSave, loadGame, loadSettings } from './core/storage.js';
 import * as daily from './core/daily.js';
+import * as draw from './core/draw.js';
 import * as records from './core/records.js';
 import { closeTopSheet } from './core/sheet.js';
 import { announce } from './core/utils.js';
@@ -29,6 +30,7 @@ import { closeDiff, openDiff, tick as infoTick } from './ui/panels/info.js';
 import { applyLook, closeLook, openLook } from './ui/panels/look.js';
 import { closeRecords, openRecords } from './ui/panels/records.js';
 import { showResult } from './ui/panels/result.js';
+import { openSlot, maybeOpenFromUrl, slotProbe } from './ui/panels/slot.js';
 import { render, updateStats } from './ui/render.js';
 import { takeHashCode, tryLoadShare } from './ui/share.js';
 import { traceCells } from './ui/trace.js';
@@ -124,6 +126,9 @@ function boot() {
   checkLives();
   paintClock();
 
+  /* ?slot=easy|mid|hard|extreme：开机直接开抽奖面板测试（抽了不记账） */
+  maybeOpenFromUrl();
+
   window.addEventListener('beforeunload', function () {
     pauseTimer();
     doSave();
@@ -207,6 +212,11 @@ window.__QUEENS_DEBUG__ = {
   dailyMark: daily.mark,
   dailyClear: daily.clear,
   startDaily: newDaily,
+  // 每日挑战的抽奖：今天哪几挡抽过了、清空记录、老虎机探针（见 tools/check-slot.mjs）
+  dailyDrawn: function () { return draw.drawnOf(daily.dayKey()); },
+  dailyDrawClear: draw.clear,
+  slot: slotProbe,
+  openSlot: openSlot,
   // 外观：面板开关 + 当前样式，只给 tools/ 里的自动化测试用
   look: function () {
     return {

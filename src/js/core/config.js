@@ -15,6 +15,9 @@ export var STORE_RECORDS = 'queens.records.v1';
 /* 每日挑战的完成记录（按天按档位，见 core/daily.js）。跟战绩分开存：
  * 「清空全部记录」不该把日历一起清掉。 */
 export var STORE_DAILY = 'queens.daily.v1';
+/* 每日挑战的抽奖记录（哪个挡抽过了，见 core/draw.js）。跟完成记录分开存：
+ * 完成记录会被重复游玩覆盖，说不了「头一回」。 */
+export var STORE_DAILY_DRAW = 'queens.dailydraw.v1';
 
 /* 设置的存档版本：改了某个默认值、又想让老存档跟上新默认值时 +1。
  *   v2：淡化 × 改成默认关闭（一铺半盘的 × 全淡下去，反而看不出棋盘的进度）。
