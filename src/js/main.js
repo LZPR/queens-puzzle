@@ -15,7 +15,7 @@ import { doSave, loadGame, loadSettings } from './core/storage.js';
 import * as daily from './core/daily.js';
 import * as records from './core/records.js';
 import { clear as clearLooks, snapshot as looksSnapshot, unlockAll as unlockAllLooks,
-  unlock as unlockLook } from './core/unlock.js';
+  unlockAllTemporarily, unlock as unlockLook } from './core/unlock.js';
 import { closeTopSheet } from './core/sheet.js';
 import { announce } from './core/utils.js';
 import { buildBoard, buildRegionBar } from './game/board.js';
@@ -57,6 +57,17 @@ window.addEventListener('orientationchange', function () {
 /* ==========================================================
    启动
    ========================================================== */
+/**
+ * ?unlock=all（或 ?unlock=1）：这一趟把外观全算解锁，方便看展柜里的每一套。
+ * **不落盘**——刷一下就回到真实账本，不会把谁的家底弄脏。
+ * 必须赶在 loadSettings() 之前：读盘时 unlockedStyle() 会拿这份结论兜底，
+ * 晚了的话存档里那套锁着的样式已经被退回默认了。
+ */
+function wantsUnlockAll() {
+  var v = new URLSearchParams(location.search).get('unlock');
+  return v === 'all' || v === '1' || v === 'true';
+}
+
 function boot() {
   if (!window.QueensEngine) {
     hintEl.textContent = '引擎加载失败，请确认 src/js/engine/engine.js 能正常加载';
@@ -64,6 +75,7 @@ function boot() {
     return;
   }
 
+  if (wantsUnlockAll()) unlockAllTemporarily();
   loadSettings();
   // 外观要在建棋盘之前落地：buildBoard 会照 settings.pieceStyle 画皇后，
   // 也会照 settings.surfaceStyle 给每格挂图案（defs 由 applySurface 先建好）
@@ -223,7 +235,11 @@ window.__QUEENS_DEBUG__ = {
       surface: settings.surfaceStyle,
       mark: settings.markStyle,
       piece: settings.pieceStyle,
-      life: settings.lifeStyle
+      life: settings.lifeStyle,
+      click: settings.clickStyle,
+      bg: settings.bgStyle,
+      filter: settings.filterStyle,
+      blurBg: settings.blurBg
     };
   },
   // 外观解锁账本：解锁一套 / 全解开 / 清空 / 快照，只给 tools/ 里的自动化测试用。

@@ -162,12 +162,22 @@ export var DEFAULT_SETTINGS = {
   noHint: false,    // 禁用提示
   noUndo: false,    // 禁用撤销
   noSnap: false,    // 禁用记录点（记下这一刻 / 还原 / 长按清空都不给）
-  // 外观（即时生效，跟着存盘）：色块的图案、叉的样式、皇后样式、生命的画法
-  // 默认就是各自那一类里的第一套（见 looks/index.js 的 DEFAULT_LOOK）
+  // 外观（即时生效，跟着存盘）：色块的图案、叉的样式、皇后样式、生命的画法、
+  // 点击特效、背景动画、棋盘滤镜。
+  // 默认就是各自那一类里的第一套（见 looks/index.js 的 DEFAULT_LOOK）——
+  // 色块那套「纯色」与三样动效的「无」都排在各自那一排的最前面，所以
+  // **开局是一块干净的平色棋盘、不播涟漪、不飘雪、也不套滤镜**。
+  // 图案、涟漪、飘落、黑白这些都是抽奖拿的奖品。
   surfaceStyle: DEFAULT_LOOK.surface,
   markStyle: DEFAULT_LOOK.mark,
   pieceStyle: DEFAULT_LOOK.piece,
   lifeStyle: DEFAULT_LOOK.life,
+  clickStyle: DEFAULT_LOOK.click,
+  bgStyle: DEFAULT_LOOK.bg,
+  filterStyle: DEFAULT_LOOK.filter,
+  /* 模糊背景（即时生效）：给背景动画那层加一道模糊的纱，用来削弱它。
+   * 只糊棋盘外面的那层飘落，棋盘与格子一点不动。默认关着。 */
+  blurBg: false,
   /* 淡化（即时生效）：填过的格子退到后面去，别跟空格抢眼睛。
    * 默认都关着——淡下去以后「这格处理过了」的分量也跟着没了，
    * 想要安静的棋盘再自己开。 */

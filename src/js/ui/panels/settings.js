@@ -1,15 +1,15 @@
 /* ============================================================================
  * panels/settings.js · 设置面板
  * ----------------------------------------------------------------------------
- * 只剩那一列「拨了立刻生效」的开关：自动打 × / 拖动对齐 / 两个淡化 / 冲突
- * 高亮 / 唯一位置提示 / 音效 / 震动。它们改的是玩起来的手感与观感，
+ * 只剩那一列「拨了立刻生效」的开关：自动打 × / 拖动对齐 / 两个淡化 / 模糊背景 /
+ * 冲突高亮 / 唯一位置提示 / 音效 / 震动。它们改的是玩起来的手感与观感，
  * 跟棋盘上摆的是什么无关，所以不需要「换一局」来落地。
  *
  * 这个面板原先还装着「开一局新的」（棋盘大小 / 目标难度 / 挑战）与「分享这一
  * 局」，现在都搬走了：
  *   · 开新局 → panels/newgame.js（顶栏那颗「新一局」）
  *   · 分享   → panels/info.js（本局信息页）
- * 于是这里既没有折叠，也没有下半截——一屏摊开就这八行。
+ * 于是这里既没有折叠，也没有下半截——一屏摊开就这九行。
  *
  * 行本身的样式（.switch-row / .switch / .stepper-label）在 base/buttons.css，
  * 换一局面板也在用；这份文件只写「设置这一列」的节奏。
@@ -21,6 +21,7 @@ import { createSheet } from '../../core/sheet.js';
 import { settings, view } from '../../core/state.js';
 import { saveSettings } from '../../core/storage.js';
 import { announce } from '../../core/utils.js';
+import { applyBgBlur } from '../effects.js';
 import { applyFadeNow } from '../fade.js';
 import { updateHint } from '../hint.js';
 import { render } from '../render.js';
@@ -61,6 +62,11 @@ export var HTML = /* html */ `
       </div>
 
       <div class="switch-row">
+        <div class="stepper-label">模糊背景<small>背景动画糊成一层纱，安静一些；棋盘本身不受影响</small></div>
+        <button class="switch" id="swBlurBg" type="button" role="switch" aria-checked="false" aria-label="模糊背景"></button>
+      </div>
+
+      <div class="switch-row">
         <div class="stepper-label">冲突高亮<small>皇后互相冲突时闪红并连线</small></div>
         <button class="switch" id="swConflict" type="button" role="switch" aria-checked="true" aria-label="冲突高亮"></button>
       </div>
@@ -93,6 +99,7 @@ var SWITCHES = [
   ['swAlignDrag', 'alignDrag'],
   ['swFadeMark', 'fadeMark'],
   ['swFadeQueen', 'fadeQueen'],
+  ['swBlurBg', 'blurBg'],
   ['swConflict', 'conflict'],
   ['swForced', 'forced'],
   ['swSound', 'sound'],
@@ -157,6 +164,12 @@ export function mount(host) {
       if (id === 'swFadeMark') settings.fadeMark = !settings.fadeMark;
       else settings.fadeQueen = !settings.fadeQueen;
       applyFadeNow();
+    } else if (id === 'swBlurBg') {
+      /* 模糊背景：只糊背景动画那一层（ui/effects.js），棋盘一像素都不动，
+       * 所以也不用重画。拨完立刻见效果，跟上面两个淡化一个规矩。 */
+      settings.blurBg = !settings.blurBg;
+      applyBgBlur();
+      announce(settings.blurBg ? '背景已模糊' : '背景恢复清晰');
     } else if (id === 'swConflict') {
       settings.conflict = !settings.conflict;
       if (!settings.conflict) view.lastConflictCount = 0;

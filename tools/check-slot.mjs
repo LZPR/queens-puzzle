@@ -172,7 +172,7 @@ await page.screenshot({ path: `${SHOTS}/slot-5-chain.png` });
 
 console.log('\n--- 5. ?luck=unlock：三个一样解锁对应外观 ---');
 await resetDone(URL + '?luck=unlock');
-// 前面的随机链条可能顺手解锁过谁；清空账本，「奖池头一套锁着的」才是确定的「自然」
+// 前面的随机链条可能顺手解锁过谁；清空账本，「奖池头一套锁着的」才是确定的「几何」
 await page.evaluate(() => { __QUEENS_DEBUG__.lookClear(); });
 await winDaily('hard');
 await jsClick('#btnDraw');
@@ -187,8 +187,8 @@ p = await probe();
 ok('钉死 unlock → 大奖档', p.tone === 'prize', p.tone);
 ok('奖品条上写着「解锁」', /解锁/.test(p.prize), p.prize);
 const led = await unlocked();
-ok('奖池头一套锁着的外观（自然）进了账本',
-  led.surface.nature === true && led.surface.sky !== true, led.surface);
+ok('奖池头一套锁着的外观（几何）进了账本',
+  led.surface.geo === true && led.surface.nature !== true, led.surface);
 await page.screenshot({ path: `${SHOTS}/slot-6-unlock.png` });
 // 外观面板里：解锁的那套摘了锁，别的还锁着（浮层互斥，先收下抽奖再开展柜）
 await jsClick('#btnSlotDone');
@@ -201,9 +201,9 @@ const lk = await page.evaluate(() => {
     .map(b => ({ id: b.dataset[k], locked: b.classList.contains('is-lock' + 'ed') }));
   return { surface: get('surface'), mark: get('mark'), piece: get('piece'), life: get('life') };
 });
-ok('「自然」解锁后摘了小锁', lk.surface.find(x => x.id === 'nature').locked === false);
+ok('「几何」解锁后摘了小锁', lk.surface.find(x => x.id === 'geo').locked === false);
 ok('其它没抽到的还锁着',
-  lk.surface.filter(x => x.id !== 'geo' && x.id !== 'nature').every(x => x.locked) &&
+  lk.surface.filter(x => x.id !== 'plain' && x.id !== 'geo').every(x => x.locked) &&
   lk.mark.every(x => x.locked === (x.id !== 'x')) &&
   lk.piece.every(x => x.locked === (x.id !== 'queen')) &&
   lk.life.every(x => x.locked === (x.id !== 'heart')), lk);

@@ -47,6 +47,11 @@ export function loadSettings() {
     settings.markStyle = unlockedStyle('mark', s.markStyle);
     settings.pieceStyle = unlockedStyle('piece', s.pieceStyle);
     settings.lifeStyle = unlockedStyle('life', s.lifeStyle);
+    settings.clickStyle = unlockedStyle('click', s.clickStyle);
+    settings.bgStyle = unlockedStyle('bg', s.bgStyle);
+    settings.filterStyle = unlockedStyle('filter', s.filterStyle);
+    /* 模糊背景：新字段，老存档没有就是关着（不想要动效的人才去开它）。 */
+    settings.blurBg = s.blurBg === true;
     /* 淡化：v2 起「淡化 ×」默认关闭。老存档没法区分「用户自己开过」和
      * 「旧默认开着」，所以干脆统一按新默认来——想淡回去面板里一拨就有。 */
     settings.fadeMark = ver >= SETTINGS_VERSION ? s.fadeMark === true : DEFAULT_SETTINGS.fadeMark;

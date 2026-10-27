@@ -1,0 +1,128 @@
+/* effects.css — 「动起来」的三样外观：点击涟漪、背景飘落、模糊背景。
+   （棋盘滤镜不用写在这儿：值由 looks/mono.js 自己给，ui/effects.js 直接挂在
+   .board 的行内 style 上 —— 样式表不该认识任何一套滤镜。）
+   开关与画法都在 ui/effects.js；这里只管长什么样。 */
+
+/* ============================================================
+   一、点击涟漪
+   ------------------------------------------------------------
+   点一格，从指尖那一处漾开一圈墨晕（Material 按钮那套水面效果）。
+   三件事让「只在当前格子」成立：
+     · 节点是 .cell 里的一个 <span>，格子自己 overflow: hidden，
+       圆长到边上就被裁掉，漫不到隔壁；
+     · translate(-50%,-50%) 让圆心正好落在 (--fx-x, --fx-y) ——
+       缩放是绕圆心做的，所以它是「从指尖涨开」，不是「从中间涨开」；
+     · pointer-events: none，不吃第二下点击。
+   直径由 js 按「落点到最远那个角」算（--fx-size），从边角落下也能盖满整格；
+   16×16 的小格子同样成立。
+   ============================================================ */
+.fx-rip {
+  position: absolute;
+  left: var(--fx-x, 50%);
+  top: var(--fx-y, 50%);
+  width: var(--fx-size, 48px);
+  height: var(--fx-size, 48px);
+  border-radius: 50%;
+  /* 一片**均匀**的半透明墨，只在最外面 12% 收边：Material 那套涟漪是「一滩
+   * 漫开的水」，不是一颗中间深、四周散的墨点——后者在格子里看着像污渍。 */
+  background: radial-gradient(circle at 50% 50%,
+    rgba(58, 51, 53, .22) 0 72%,
+    rgba(58, 51, 53, .14) 88%,
+    rgba(58, 51, 53, 0) 100%);
+  transform: translate(-50%, -50%) scale(.06);
+  pointer-events: none;
+  animation: fxRipple .48s cubic-bezier(.2, .6, .3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* 前面涨得快、后面慢下来淡掉：像水面，不像闪光灯。
+   淡出的起点压在 60%（不是 55% 就掉一半）——太早掉下去，一整格只剩「闪了一下」，
+   看不出是涟漪。 */
+@keyframes fxRipple {
+  0%   { transform: translate(-50%, -50%) scale(.06); opacity: .9; }
+  60%  { opacity: .62; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+/* ============================================================
+   二、背景飘落（棋盘之外）
+   ------------------------------------------------------------
+   一层固定在视口上的 .bg-fx，z-index: -1 —— 在纸背景之上、所有内容之下：
+   不吃点击，也不用谁给它让位（顶栏、舞台、浮层全都压在它上面）。
+   里面每一枚形状的参数都写在自己的行内变量上（ui/effects.js 的雪场）：
+
+     --l 横向位置   --s 大小     --d 一整趟的时长
+     --delay 起点（负值 = 一开机就在半空）
+     --sway 边走边横移多远       --spin 这一趟转多少度   --o 最浓时的浓度
+     --c 这一枚的颜色（五个形状各一色，见 effects.js 的 BG_TINTS）
+
+   动的是 transform 与 opacity，全程走合成层，不碰布局。
+   ============================================================ */
+.bg-fx {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  /* 这一层故意**什么属性都不加**：filter / opacity / contain 任何一个
+   * 都会把它变成一张 render surface，把里面的 14 个动画元素拍平、每帧重新合成
+   * —— 那样下面「逐枚模糊」就白省了。裁剪靠 overflow: hidden 已经够。 */
+}
+
+.bg-s {
+  position: absolute;
+  top: 0;
+  left: var(--l, 50%);
+  width: var(--s, 12px);
+  height: var(--s, 12px);
+  /* 让形状的中心落在 (left, top) 上，跟涟漪同一个算法 */
+  margin: calc(var(--s, 12px) / -2) 0 0 calc(var(--s, 12px) / -2);
+  background: var(--c, var(--ink));
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: bgFall var(--d, 22s) linear var(--delay, 0s) infinite;
+}
+
+/* 一条路走完：从屏幕上方外飘进来，横着晃一下，转着落到底，两头淡进淡出。
+   半路的 50% 那一帧是「晃得最远」的地方，所以看着像雪，像被风带着走。 */
+@keyframes bgFall {
+  0%   { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
+  7%   { opacity: var(--o, .16); }
+  50%  { transform: translate3d(var(--sway, 0px), 50vh, 0)
+                    rotate(calc(var(--spin, 360deg) * .55)); }
+  93%  { opacity: var(--o, .16); }
+  100% { transform: translate3d(0, 110vh, 0) rotate(var(--spin, 360deg)); opacity: 0; }
+}
+
+/* 五种几何形状，都用 clip-path 裁出来（没有图、没有 canvas） */
+.bg-tri { clip-path: polygon(50% 2%, 98% 94%, 2% 94%); }
+.bg-square { border-radius: 1px; }
+.bg-diamond { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.bg-circle { border-radius: 50%; }
+.bg-hex { clip-path: polygon(25% 3%, 75% 3%, 97% 50%, 75% 97%, 25% 97%, 3% 50%); }
+
+/* 设置里的「模糊背景」：给背景加一道纱。
+ *
+ * 关键：**糊的是每一枚，不是整层**。
+ * 整层 filter 会让 .bg-fx 变成一张画布——而里面 14 枚一直在动，浏览器
+ * 只能每帧把**整个视口**重新栅格化再重新模糊一遍（手机上 DPR 2–3，
+ * 一次就是一百多万像素），配上飘落直接掉帧。
+ * 挂在每枚形状上之后，模糊的是一个个二十来像素的小盒子，而且元素内容不变、
+ * 只有 transform / opacity 在变，模糊结果能被缓存成纹理，
+ * 后面每帧只是 GPU 平移 / 旋转，几乎不花钱。
+ *
+ * 半径同时只有原来的一半（7px → 3.5px）：模糊的目的是让背景退到后面去，
+ * 不是把它糊成一团雾；半径小一半，栅格化成本也小一截。
+ *
+ * 别在 .bg-fx 上补 opacity / filter 来「压淡」：那等于又把层拍平。
+ * 要压浓度就调 effects.js 里的 --o，那个是每枚自己的透明度，不破坏合成。 */
+html.is-blur-bg .bg-s {
+  filter: blur(3.5px);
+}
+
+/* 系统要求少动画时：这一层根本不会被建出来（ui/effects.js 里就返回了），
+   这条只是兜底 —— 万一是运行中改的系统设置，也让它们别再动。 */
+@media (prefers-reduced-motion: reduce) {
+  .bg-s { animation: none; opacity: 0; }
+  .fx-rip { display: none; }
+}

@@ -18,6 +18,9 @@
 @import url("./base/lives.css");
 @import url("./base/board.css");
 @import url("./base/board-states.css");
+/* 动效三样（点击涟漪 / 背景飘落 / 模糊背景）压在棋盘之后：涟漪是格子里的
+   一个节点，背景层反而在整页最底下（z-index: -1），位置由自己定 */
+@import url("./base/effects.css");
 @import url("./base/regions.css");
 @import url("./base/buttons.css");
 @import url("./base/veil.css");

@@ -567,9 +567,10 @@ const sheet = await page.evaluate(() => {
 });
 check('设置面板打开', sheet.open, `inView=${sheet.inView}`);
 check('设置面板完整可见', sheet.inView);
-// 八个偏好开关：自动打叉 / 拖动对齐 / 淡化 × / 淡化皇后 / 冲突 / 唯一位置 / 音效 / 震动。
+// 九个偏好开关：自动打叉 / 拖动对齐 / 淡化 × / 淡化皇后 / 模糊背景 / 冲突 /
+// 唯一位置 / 音效 / 震动。
 // 挑战那两颗跟着「开一局新的」搬去了换一局面板，分享搬去了信息页。
-check('设置面板只剩 8 个开关', sheet.sw === 8, `sw=${sheet.sw}`);
+check('设置面板是 9 个开关', sheet.sw === 9, `sw=${sheet.sw}`);
 check('设置面板不再折叠、也没有分享', sheet.more === false && sheet.share === false);
 check('设置面板一屏放得下', !sheet.scrollable);
 await page.screenshot({ path: `${OUT}/06-settings.png` });

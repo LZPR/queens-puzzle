@@ -1,8 +1,8 @@
 /* ============================================================================
  * unlock.js · 外观解锁账本
  * ----------------------------------------------------------------------------
- * 外观不再全白送：每一类（色块 / 叉 / 皇后 / 生命）只有**第一套**开局就有，
- * 其余的都锁在展柜里，靠每日挑战首通的抽奖解锁（ui/panels/slot.js）。
+ * 外观不再全白送：每一类（色块 / 叉 / 皇后 / 生命 / 点击 / 背景 / 滤镜）只有**第一套**
+ * 开局就有，其余的都锁在展柜里，靠每日挑战首通的抽奖解锁（ui/panels/slot.js）。
  * 「抽到了没有」得自己记一笔——settings 里存的是「现在用哪套」，
  * 不是「家里有哪些」，两件事不能混（清偏好不该清家底）。单独一份账本：
 
@@ -12,6 +12,13 @@
  * 账本丢了 / 换了机器，至少还有一套能用的。反过来，settings 里存着一套
  * 没解锁的样式（老存档 / 手改的）也退回第一套，见 unlockedStyle()。
  *
+ * 插件里的条目还可以自己写 `free: true`（永远可选，各类的「无 / 关掉」都这么写），
+ * 或 `prize: false`（可选，但不进抽奖池）。
+ * 这两个字段只影响「要不要靠抽奖拿」和「转轮上转不转」，不进账本。
+ *
+ * 调试用的 `?unlock=all` 走 unlockAllTemporarily()：把这一趟全算解锁，
+ * **不写盘**——刷一下就回到真实账本，不会把测试机的家底弄脏。
+ *
  * 跟 core/daily.js 一样只管数据：不碰 DOM、不碰音效。
  * ========================================================================== */
 
@@ -19,6 +26,9 @@ import { STORE_LOOKS } from './config.js';
 import { KINDS, findOf, listOf } from '../looks/index.js';
 
 var cache = null;
+
+/* 这一趟是不是「全都算解锁」（?unlock=all）。只在内存里，不落盘。 */
+var tempAll = false;
 
 function read() {
   if (cache) return cache;
@@ -50,12 +60,23 @@ function persist(data) {
 /* ==========================================================
    查询 / 记账
    ========================================================== */
-/** 这套样式解锁了没有。每一类的第一套（出厂默认）永远是开的。 */
+/** 这套样式解锁了没有。
+ *  第一套（出厂默认）与插件里写了 free 的（各类的「无」、默认就开着的那几样）
+ *  永远算开着；?unlock=all 的那一趟里什么都算开着。 */
 export function isUnlocked(kind, id) {
+  if (tempAll) return true;
   if (KINDS.indexOf(kind) < 0) return false;
   var list = listOf(kind);
   if (list.length && list[0].id === id) return true;
+  var o = findOf(kind, id);
+  if (o && o.free) return true;
   return !!read().got[kind + ':' + id];
+}
+
+/** 这一套能不能进抽奖池（`prize: false` 的只是面板上的开关，不是奖品）。 */
+export function isPrize(kind, id) {
+  var o = findOf(kind, id);
+  return !o || o.prize !== false;
 }
 
 /** 解锁一套。真解开了（之前锁着）返回 true，本来就开着返回 false。 */
@@ -116,7 +137,7 @@ export function unlockedStyle(kind, id) {
   return list.length ? list[0].id : '';
 }
 
-/** 解锁账本的快照：{ surface: { geo: true }, ... }（每类第一套也算上）。
+/** 解锁账本的快照：{ surface: { geo: true }, ... }（每一套能用的都算上）。
  * 只给 tools/ 里的自动化测试用。 */
 export function snapshot() {
   var out = {};
@@ -129,6 +150,21 @@ export function snapshot() {
     out[kind] = m;
   }
   return out;
+}
+
+/* ==========================================================
+   临时全解锁（调试用）
+   ========================================================== */
+/** `?unlock=all` / `?unlock=1`：这一趟把外观全算解锁，**不写盘**。
+ *  必须赶在 loadSettings() 之前调：读盘时 unlockedStyle() 要用这个结论，
+ *  否则存档里那套锁着的样式会被先退回默认，参数就白设了。 */
+export function unlockAllTemporarily() {
+  tempAll = true;
+}
+
+/** 这一趟是不是被 ?unlock=all 顶开了（面板与测试想知道）。 */
+export function isTempUnlocked() {
+  return tempAll;
 }
 
 /** 清空账本（只给 tools/ 里的自动化测试用）。 */

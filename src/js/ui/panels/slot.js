@@ -147,13 +147,16 @@ function icon(k) {
 function entryKey(e) { return e.kind + ':' + e.o.id; }
 
 /* 奖池的快照： locks 状态是活的（这一抽解锁了，下一抽就少一件），
- * 所以每次拉杆都重新抄一遍，别缓存。 */
+ * 所以每次拉杆都重新抄一遍，别缓存。
+ * 写了 prize: false 的条目不进奖池：那是「无 / 关掉」这类开关（涟漪的「无」、
+ * 背景的「无」、滤镜的「无」），转轮上转出个「无」既没意义也没画可画。 */
 function buildPool() {
   var out = [];
   for (var k = 0; k < KINDS.length; k++) {
     var kind = KINDS[k];
     var items = listOf(kind);
     for (var i = 0; i < items.length; i++) {
+      if (items[i].prize === false) continue;
       out.push({ kind: kind, o: items[i], locked: !isUnlocked(kind, items[i].id) });
     }
   }
@@ -235,6 +238,23 @@ function symIcon(e) {
       : '<svg viewBox="0 0 24 24" style="stroke:none" aria-hidden="true">' +
         '<path fill="currentColor" d="M12 20.2S3.6 15 3.6 9.3C3.6 6.4 5.9 4.6 8.2 4.6c1.7 0 3 .9 3.8 2.1' +
         '.8-1.2 2.1-2.1 3.8-2.1 2.3 0 4.6 1.8 4.6 4.7C20.4 15 12 20.2 12 20.2z"/></svg>';
+  }
+  /* 点击特效：两圈同心墨环（就是格子里那一下涟漪的样子） */
+  if (e.kind === 'click') {
+    return '<svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4"/></svg>';
+  }
+  /* 背景动画：一枚三角压一枚方块，就是飘下来的那些形状 */
+  if (e.kind === 'bg') {
+    return '<svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none" aria-hidden="true">' +
+      '<path d="M9 3.4l5.4 9.2H3.6z" opacity=".85"/>' +
+      '<rect x="12.6" y="12.6" width="7.6" height="7.6" rx="1.2" opacity=".5"/></svg>';
+  }
+  /* 棋盘滤镜：一个圆，右半填实 —— 一半墨一半空，说的是明暗对比 */
+  if (e.kind === 'filter') {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="8"/>' +
+      '<path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/></svg>';
   }
   /* 皇后：直接用插件的整段画。转轮的 CSS 给 svg 上的是描边那套，
    * 剪影是填色的，垫一行 style 压回去。 */

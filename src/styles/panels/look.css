@@ -116,6 +116,11 @@ html[data-piece="cat"] .piece svg { filter: none; }
 #lifeRow .sc-case { --sc-bg: #FADCD8; }
 /* 色块那排的罩子用中性纸色：底下本身就是一块彩色的 3×3 小盘，再用彩色底托会打架 */
 #surfaceRow .sc-case { --sc-bg: #F1E8DA; }
+/* 后三排是动效：点击（淡绿）/ 背景（淡蓝）/ 滤镜（中性灰）。
+   三块都不一样，一眼分得清「这一排说的是哪一层」。 */
+#clickRow .sc-case { --sc-bg: #DCE9D3; }
+#bgRow .sc-case { --sc-bg: #D8E6F2; }
+#filterRow .sc-case { --sc-bg: #E6E3DE; }
 
 /* 顶灯：从罩子上方打下来的一团暖光 */
 .sc-lamp {
@@ -178,6 +183,62 @@ html[data-piece="cat"] .piece svg { filter: none; }
   overflow: hidden;
   box-shadow: 0 1px 0 rgba(58, 51, 53, .18);
 }
+
+/* ---- 动效三排的预览 ----
+   前四排的预览画的是「长什么样」，后三排画的是「动起来是什么样子」。
+   三样都用同一块「格子」当底（.pv-tile）：白底 + 一圈淡墨边，
+   跟棋盘上一格 8×8 的感觉对得上，涟漪 / 飘落 / 滤镜摆在上面对照着看。 */
+.pv-tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #FFFFFF;
+  box-shadow: inset 0 0 0 2px rgba(58, 51, 53, .13), 0 1px 0 rgba(58, 51, 53, .16);
+}
+
+/* 「无」：空落落的格子 + 一个 ∅，一眼看出这一套是「什么都不做」 */
+.pv-tile.is-empty { background: rgba(255, 255, 255, .55); }
+
+.pv-none {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--ink);
+  opacity: .34;
+}
+
+/* 涟漪：三圈由外到内、由淡到深的墨环 —— 水面那一圈扩散，一帧的样子。
+   画成一滩墨的话，缩到这个尺寸就只是一颗模糊的灰点，认不出是涟漪。 */
+.pv-rip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--ink);
+  background: transparent;
+}
+
+.pv-rip.r1 { width: 86%; height: 86%; opacity: .14; }
+.pv-rip.r2 { width: 56%; height: 56%; opacity: .26; }
+/* 最里面那圈是「指尖落下的地方」：带一点淡淡的墨底 */
+.pv-rip.r3 { width: 26%; height: 26%; opacity: .46; background: rgba(58, 51, 53, .18); }
+
+/* 几何：几枚形状高低错落（画在 svg 里，52 的坐标系） */
+.pv-snow {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: var(--ink);
+  stroke: none;
+}
+
+/* 棋盘滤镜的预览：拿当前这套色块当样本，一模一样的小盘，只差一道滤镜
+   （filter 由插件给值、js 写在行内 style 上，这里不写死任何一套） */
+#filterRow .pv-skin { box-shadow: 0 1px 0 rgba(58, 51, 53, .18); }
 
 /* 插件名的小标签：只有一排里跨了多个插件时才出现，
    说明「这套是哪家做的」，字号压到最小、透明度压到最低，不跟名牌抢。 */

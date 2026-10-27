@@ -78,8 +78,8 @@ const sheet = await page.evaluate(() => {
     settingsFade: __QUEENS_DEBUG__.settings.fadeMark
   };
 });
-check('设置面板只剩 8 个开关，且全部摊开',
-  sheet.open && sheet.total === 8 && sheet.visible === 8, `${sheet.visible}/${sheet.total}`);
+check('设置面板是 9 个开关，且全部摊开',
+  sheet.open && sheet.total === 9 && sheet.visible === 9, `${sheet.visible}/${sheet.total}`);
 check('设置面板不再有「显示更多选项」', sheet.moreBtn === false);
 check('分享已经不在设置面板里', sheet.shareInSettings === false);
 check('淡化 × 默认关闭', sheet.fadeMark === 'false' && sheet.settingsFade === false);

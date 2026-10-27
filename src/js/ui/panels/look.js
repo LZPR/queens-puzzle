@@ -1,7 +1,8 @@
 /* ============================================================================
  * panels/look.js · 外观面板
  * ----------------------------------------------------------------------------
- * 四排「展柜」：色块的花样、叉、皇后、生命（挑战「标错惩罚」的命数）长什么样。
+ * 七排「展柜」：色块的花样、叉、皇后、生命（挑战「标错惩罚」的命数）长什么样，
+ * 外加三样会动的 —— 点击特效、背景动画、棋盘滤镜。
  * 选项不写在这个文件里：按钮是按 looks/index.js 登记的外观插件现场生成的，
  * 一排里跨了好几个插件时，每个展位左上角会挂一个插件名的小标签。
  *
@@ -22,7 +23,32 @@ import { announce } from '../../core/utils.js';
 import { applyPieceStyle } from '../../game/board.js';
 import { applySurface, surfaceInk } from '../../game/skin.js';
 import { isUnlocked } from '../../core/unlock.js';
-import { DEFAULT_LOOK, KIND, KINDS, groupsOf, styleId, styleName } from '../../looks/index.js';
+import { DEFAULT_LOOK, KIND, KINDS, findOf, groupsOf, styleId, styleName } from '../../looks/index.js';
+import { applyEffects } from '../effects.js';
+
+/* 一排展柜的骨架：标题 + 「当前：…」 + 装展位的行。
+ * 七排长得一样，所以按 KINDS 现场生成——加一类外观只改 looks/index.js，
+ * 这个文件不用再抄一段 markup（以前的四排是手写的，加第五排就得double一遍）。 */
+function caseHtml(kind) {
+  var k = KIND[kind];
+  return '<div class="case">' +
+      '<div class="case-head"><b>' + k.label + '</b>' +
+        '<span id="' + kind + 'Now">当前：' + styleName(kind, DEFAULT_LOOK[kind]) + '</span></div>' +
+      '<div class="case-row" id="' + kind + 'Row" role="radiogroup" aria-label="' + k.label + '的样式"></div>' +
+    '</div>';
+}
+
+/* 前四排画在棋盘上 / 命数条上（色块 / 叉 / 皇后 / 生命）；
+ * 后三排是「动起来」的三样：
+ *   · 点击特效只管被点的那一格，
+ *   · 背景动画在棋盘之外，
+ *   · 棋盘滤镜只罩棋盘本身。
+ * 展位本身由 src/js/looks/ 里登记的插件现场生成。 */
+var CASES = (function () {
+  var out = '';
+  for (var i = 0; i < KINDS.length; i++) out += caseHtml(KINDS[i]);
+  return out;
+})();
 
 export var HTML = /* html */ `
 <div class="sheet-wrap" id="lookWrap" hidden>
@@ -40,42 +66,18 @@ export var HTML = /* html */ `
       转到三枚一样的，就把那套外观收进展柜；两枚一样再多转一次。
       每排的第一套是开局自带的，抽到的都在这里换。</p>
 
-    <!-- 三排展柜：选项按钮由 src/js/looks/ 里登记的外观插件现场生成。
-         一排里跨了多个插件时，展位左上角会挂一个插件名的小标签。 -->
-    <div class="case">
-      <div class="case-head"><b>色块</b><span id="surfaceNow">当前：几何</span></div>
-      <div class="case-row" id="surfaceRow" role="radiogroup" aria-label="色块的样式"></div>
-    </div>
-
-    <div class="case">
-      <div class="case-head"><b>叉</b><span id="markNow">当前：叉</span></div>
-      <div class="case-row" id="markRow" role="radiogroup" aria-label="叉的样式"></div>
-    </div>
-
-    <div class="case">
-      <div class="case-head"><b>皇后</b><span id="pieceNow">当前：皇后</span></div>
-      <div class="case-row" id="pieceRow" role="radiogroup" aria-label="皇后样式"></div>
-    </div>
-
-    <!-- 生命的画法只影响挑战「标错惩罚」那一排命（信息条下面，见 base/lives.css）：
-         惩罚没开的时候是收起来的，所以这一排平时看不出来。 -->
-    <div class="case">
-      <div class="case-head"><b>生命</b><span id="lifeNow">当前：红心</span></div>
-      <div class="case-row" id="lifeRow" role="radiogroup" aria-label="生命的样式"></div>
-    </div>
+    ${CASES}
   </div>
 </div>`;
 
 var lookWrap = null, lookSheet = null, lookBackdrop = null;
-var surfaceRow = null, surfaceNow = null;
-var markRow = null, markNow = null;
-var pieceRow = null, pieceNow = null;
-/* 注意：lifeRow 是这一排展位，跟舞台上方那条命数读数（#livesRow）不是一回事 */
-var lifeRow = null, lifeNow = null;
 
 var sheet = null;
 
-/* 每类外观落在面板里的容器与「当前：…」那行小字 */
+/* 每类外观落在面板里的容器与「当前：…」那行小字。
+ * 按 KINDS 一张表建齐（七排），加一类外观不用在这里加变量。
+ * 注意：生命那一排的展位 id 是 lifeRow —— 跟舞台上方那条命数读数（#livesRow）
+ * 差一个字母，别搞混。 */
 var ROW_ELS = null;
 
 /* 展位右上角那枚勾：选中才亮，用一块黄圆点把「就是这套」说清楚 */
@@ -94,34 +96,80 @@ var LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
 /* 色块图案的预览挑这四枚：图形彼此差得远，2×2 摆开一眼能看出这套花样是什么脾气 */
 var SKIN_PICKS = [8, 14, 5, 10];
 
+/* 一小块 2×2 的棋盘（底色 + 图形），就是它在盘子上缩小的样子。
+ * 预览里的图案比棋盘上**深一点**（浓度放到三倍多）：缩到五十来像素，
+ * 按棋盘那个浓度画就等于什么都没画，展柜里得让人认出这是哪一套。
+ * 压暗 / 提亮由 surfaceInk 按这套图案自己的 ink 决定，预览不另算。
+ * extra 是额外的行内样式（棋盘滤镜那排要把滤镜本身叠上去）。 */
+function miniBoard(o, extra) {
+  var c = 50;
+  var k = o.motifs ? Math.max(.02, Math.min(.5, (o.tone || 0) * 3.2)) : 0;
+  var out = '';
+  for (var i = 0; i < 4; i++) {
+    var ci = SKIN_PICKS[i] % REGION_COLORS.length;
+    var color = REGION_COLORS[ci];
+    var x = (i % 2) * c, y = ((i / 2) | 0) * c;
+    out += '<rect x="' + x + '" y="' + y + '" width="' + c + '" height="' + c +
+      '" fill="' + color + '"/>';
+    if (o.motifs && o.motifs[ci]) {
+      var ink = surfaceInk(color, o, k);
+      out += '<g transform="translate(' + x + ' ' + y + ') scale(.5)"' +
+        ' fill="' + ink + '" style="color:' + ink + '">' + o.motifs[ci] + '</g>';
+    }
+  }
+  /* 预览也戴上这套图案自己的纱（veil）：展柜里看到什么，选完棋盘上就是什么。
+   * 只戴一半——纱开个方（.45 → .67）：小盘只有四十来像素，全戴上就糊成一片，
+   * 展柜毕竟还得让人认出这是哪一套。 */
+  var veil = isFinite(o.veil) ? Math.sqrt(o.veil) : 1;
+  return '<span class="pv-skin" style="opacity:' + veil + (extra ? ';' + extra : '') + '">' +
+    '<svg viewBox="0 0 100 100" aria-hidden="true">' + out + '</svg></span>';
+}
+
+/* 「无」这类开关的牌子：一个空落落的格子 + 一道 ∅。
+ * 不画效果本身，免得看着像「这套也在动」。 */
+function noneGlyph() {
+  return '<span class="pv-tile is-empty">' +
+    '<svg class="pv-none" viewBox="0 0 52 52" aria-hidden="true">' +
+      '<circle cx="26" cy="26" r="16" fill="none" stroke="currentColor" stroke-width="2.2"' +
+      ' stroke-dasharray="3.4 4.8"/>' +
+      '<path d="M19.6 26h12.8" fill="none" stroke="currentColor" stroke-width="2.6"' +
+      ' stroke-linecap="round"/>' +
+    '</svg></span>';
+}
+
 /* 柜子里摆什么：把这一套缩小画一份摆在台子上 */
 function preview(kind, o) {
-  if (kind === 'surface') {
-    /* 2×2 的一小块棋盘：底色 + 图形，就是它在盘子上缩小的样子。
-     * 预览里的图案比棋盘上**深一点**（浓度放到三倍多）：缩到五十来像素，
-     * 按棋盘那个浓度画就等于什么都没画，展柜里得让人认出这是哪一套。
-     * 压暗 / 提亮由 surfaceInk 按这套图案自己的 ink 决定，预览不另算。 */
-    var c = 50;
-    var k = o.motifs ? Math.max(.02, Math.min(.5, (o.tone || 0) * 3.2)) : 0;
-    var out = '';
-    for (var i = 0; i < 4; i++) {
-      var ci = SKIN_PICKS[i] % REGION_COLORS.length;
-      var color = REGION_COLORS[ci];
-      var x = (i % 2) * c, y = ((i / 2) | 0) * c;
-      out += '<rect x="' + x + '" y="' + y + '" width="' + c + '" height="' + c +
-        '" fill="' + color + '"/>';
-      if (o.motifs && o.motifs[ci]) {
-        var ink = surfaceInk(color, o, k);
-        out += '<g transform="translate(' + x + ' ' + y + ') scale(.5)"' +
-          ' fill="' + ink + '" style="color:' + ink + '">' + o.motifs[ci] + '</g>';
-      }
-    }
-    /* 预览也戴上这套图案自己的纱（veil）：展柜里看到什么，选完棋盘上就是什么。
-     * 只戴一半——纱开个方（.45 → .67）：小盘只有四十来像素，全戴上就糊成一片，
-     * 展柜毕竟还得让人认出这是哪一套。 */
-    var veil = isFinite(o.veil) ? Math.sqrt(o.veil) : 1;
-    return '<span class="pv-skin" style="opacity:' + veil + '">' +
-      '<svg viewBox="0 0 100 100" aria-hidden="true">' + out + '</svg></span>';
+  if (kind === 'surface') return miniBoard(o);
+
+  /* 棋盘滤镜：拿**当前这套色块**当样本，一模一样的小盘，只差一道滤镜。
+   * 滤镜的值由插件自己写在 `filter` 上，这里照抄——样式表不认识任何一套滤镜。 */
+  if (kind === 'filter') {
+    var surf = findOf('surface', settings.surfaceStyle) || {};
+    return miniBoard(surf, o.filter ? 'filter:' + o.filter : '');
+  }
+
+  if (kind === 'click') {
+    if (o.id === 'none') return noneGlyph();
+    /* 涟漪：一小块格子 + 三圈由外到内、由淡到深的墨环，取「正在扩散」的那一帧 */
+    return '<span class="pv-tile">' +
+      '<i class="pv-rip r1"></i><i class="pv-rip r2"></i><i class="pv-rip r3"></i>' +
+      '</span>';
+  }
+
+  if (kind === 'bg') {
+    if (o.id === 'none') return noneGlyph();
+    /* 几何：几枚形状高低错落，看得出是「往下落的一片」 */
+    return '<span class="pv-tile">' +
+      '<svg class="pv-snow" viewBox="0 0 52 52" aria-hidden="true">' +
+        '<path d="M9.6 3.2l5 8.6h-10z" opacity=".5"/>' +
+        '<rect x="34" y="6" width="7.4" height="7.4" rx="1.2" opacity=".3"' +
+          ' transform="rotate(18 37.7 9.7)"/>' +
+        '<path d="M38.6 20.4l4.6 7.8H34z" opacity=".26"/>' +
+        '<circle cx="11.4" cy="26.4" r="3.8" opacity=".34"/>' +
+        '<path d="M27 27.6l3.6 2.1v4.2L27 36l-3.6-2.1v-4.2z" opacity=".24"/>' +
+        '<rect x="6.4" y="35.6" width="6.6" height="6.6" rx="1.1" opacity=".22"' +
+          ' transform="rotate(-12 9.7 38.9)"/>' +
+      '</svg></span>';
   }
 
   if (kind === 'mark') {
@@ -189,13 +237,16 @@ function buildCase(kind) {
  * 叉：只改 <html data-mark>，CSS 自己会换画法（不需要重画格子）。
  * 皇后：<html data-piece> 管占位，格子里的画由 board.js 换。
  * 生命：只改 <html data-life>，命数那一排的两套画法都在 DOM 里，CSS 决定露哪套。
- * 四样都只是「画法」，不碰 state.marks，也不影响存档里的局面。 */
+ * 点击特效 / 背景 / 棋盘滤镜：交给 ui/effects.js（它管三层：格子里的一下、
+ * 棋盘外的一层、整块棋盘上的一道滤镜）。
+ * 七样都只是「画法 / 动效」，不碰 state.marks，也不影响存档里的局面。 */
 export function applyLook() {
   var root = document.documentElement;
   root.setAttribute('data-mark', settings.markStyle);
   root.setAttribute('data-piece', settings.pieceStyle);
   root.setAttribute('data-life', settings.lifeStyle);
   applySurface();   // 顺带写 data-surface、建 defs、给每格上墨色
+  applyEffects();   // 顺带写 data-click / data-bg / data-filter、铺背景层、挂滤镜
   // 只在真的换了样式时重画格子里的画：新棋盘本来是照当前样式建的，不用再刷一遍
   if (view.lookPiece !== settings.pieceStyle) applyPieceStyle();
   syncLook();
@@ -266,22 +317,16 @@ export function mount(host) {
   lookWrap = document.getElementById('lookWrap');
   lookSheet = document.getElementById('lookSheet');
   lookBackdrop = document.getElementById('lookBackdrop');
-  surfaceRow = document.getElementById('surfaceRow');
-  surfaceNow = document.getElementById('surfaceNow');
-  markRow = document.getElementById('markRow');
-  markNow = document.getElementById('markNow');
-  pieceRow = document.getElementById('pieceRow');
-  pieceNow = document.getElementById('pieceNow');
-  lifeRow = document.getElementById('lifeRow');
-  lifeNow = document.getElementById('lifeNow');
 
-  ROW_ELS = {
-    surface: { row: surfaceRow, now: surfaceNow },
-    mark: { row: markRow, now: markNow },
-    piece: { row: pieceRow, now: pieceNow },
-    life: { row: lifeRow, now: lifeNow }
-  };
-  for (var kk = 0; kk < KINDS.length; kk++) buildCase(KINDS[kk]);
+  ROW_ELS = {};
+  for (var kk = 0; kk < KINDS.length; kk++) {
+    var kind = KINDS[kk];
+    ROW_ELS[kind] = {
+      row: document.getElementById(kind + 'Row'),
+      now: document.getElementById(kind + 'Now')
+    };
+    buildCase(kind);
+  }
 
   /* 跟设置 / 本局信息 / 战绩同一套：inert、canPlay、Esc、Tab 都在 core/sheet.js 里。
    * 关掉之后焦点回到顶栏那颗按钮，键盘用户不用重新 Tab 一遍。 */
@@ -301,10 +346,11 @@ export function mount(host) {
   lookSheet.addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('.showcase') : null;
     if (!b) return;
-    // 四排的按钮都叫 .showcase，靠 data-surface / data-mark / data-piece / data-life 分派
-    if (b.dataset.surface) pickLook('surface', b.dataset.surface);
-    else if (b.dataset.mark) pickLook('mark', b.dataset.mark);
-    else if (b.dataset.piece) pickLook('piece', b.dataset.piece);
-    else if (b.dataset.life) pickLook('life', b.dataset.life);
+    /* 七排的按钮都叫 .showcase，靠 data-surface / data-mark / … / data-filter
+     * 分派。按 KINDS 挨个认，加一类外观不用再来这里加一支 else if。 */
+    for (var i = 0; i < KINDS.length; i++) {
+      var id = b.dataset[KINDS[i]];
+      if (id) { pickLook(KINDS[i], id); return; }
+    }
   });
 }

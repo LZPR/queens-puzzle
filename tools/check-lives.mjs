@@ -393,7 +393,7 @@ const lookUi = await page.evaluate(() => {
 ok('外观面板里有「生命」这一排：红心 / 血条',
   lookUi.ids.join() === 'heart,bar' && lookUi.plates.join() === '红心,血条',
   `${lookUi.ids}/${lookUi.plates}`);
-ok('这一排有四个展柜组', lookUi.cases === 4, lookUi.cases);
+ok('这一排有七个展柜组（四样画法 + 三样动效）', lookUi.cases === 7, lookUi.cases);
 ok('两个摆件都有画', lookUi.svgs === 2, lookUi.svgs);
 ok('默认是红心', lookUi.attr === 'heart' && /红心/.test(lookUi.now), lookUi.now);
 ok('没有「知道了」按钮，内容超一屏自己滚',

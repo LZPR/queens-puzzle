@@ -21,6 +21,7 @@ import { handleKey } from './core/sheet.js';
 import { guide, hasProgress, settings, state, view } from './core/state.js';
 import { save } from './core/storage.js';
 import { endPeek } from './game/board.js';
+import { clickFx } from './ui/effects.js';
 import { closeGuide, guideNext, guidePrev, useHint } from './ui/guide.js';
 import { flashHint } from './ui/hint.js';
 import { openNew } from './ui/panels/newgame.js';
@@ -114,6 +115,11 @@ gridEl.addEventListener('pointerdown', function (e) {
   var dbl = !!(last && last.i === i && (now - last.t) < 340);
   var prev = state.marks[i];
   var autoHere = !!(state.auto && state.auto[i]);
+
+  /* 点击特效（外观面板的「涟漪」）：按在哪儿就从哪儿漾开。
+   * 放在 onCell 之前——这一下按下去本来就有动静，哪怕它最后什么都没改
+   * （比如点在自动打的 × 上），水面也该动一下。 */
+  clickFx(cell, e.clientX, e.clientY);
 
   onCell(i);  // 沿用原来的单击 / 双击语义（这一格立刻生效）
 
@@ -216,7 +222,10 @@ gridEl.addEventListener('click', function (e) {
   var cell = e.target.closest ? e.target.closest('.cell') : null;
   if (!cell) return;
   var i = parseInt(cell.dataset.i, 10);
-  if (!isNaN(i)) onCell(i);
+  if (isNaN(i)) return;
+  // 没有坐标的点击（键盘回车 / 读屏器）：涟漪从格子正中漾开
+  clickFx(cell);
+  onCell(i);
 });
 
 /* ==========================================================

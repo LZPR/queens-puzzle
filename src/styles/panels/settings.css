@@ -1,8 +1,10 @@
 /* panels/settings.css — 设置面板。
    只剩一列「拨了立刻生效」的开关：行本身（.switch-row / .switch /
    .stepper-label）在 base/buttons.css——换一局面板的「挑战」也在用同一套。
-   这里只写「设置这一列」自己的节奏：八行要在 320×640 上一屏放得下，
-   所以行距比面板里的通用值紧 1px（省下 16px，正好够不滚）。 */
+   这里只写「设置这一列」自己的节奏：九行要在 320×640 上一屏放得下，
+   所以行距比面板里的通用值紧 1px。
+   第九行（模糊背景）加进来以后 320×640 会溢出 58px，矮屏那条补偿写在
+   responsive.css 的 @media (max-height: 720px) 里。 */
 
 .settings-list .switch-row {
   padding: 9px 0;
