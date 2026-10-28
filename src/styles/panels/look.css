@@ -236,6 +236,23 @@ html[data-piece="cat"] .piece svg { filter: none; }
   stroke: none;
 }
 
+/* 水面：下半格是水，水面上一条起伏的亮线 + 后面跟上的一道淡浪 ——
+   「水在动」与「点一下会荡开」两件事都在这一格里（真水线是波动方程算的，
+   展柜里的小图只截住它起伏的那一瞬间）。 */
+.pv-tide {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pv-tide .t-water { fill: rgba(133, 197, 210, .62); }
+.pv-tide .t-line {
+  fill: none;
+  stroke: rgba(255, 255, 255, .95);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.pv-tide .t-line-b { stroke-width: 1.4; opacity: .5; }
+
 /* 棋盘滤镜的预览：拿当前这套色块当样本，一模一样的小盘，只差一道滤镜
    （filter 由插件给值、js 写在行内 style 上，这里不写死任何一套） */
 #filterRow .pv-skin { box-shadow: 0 1px 0 rgba(58, 51, 53, .18); }

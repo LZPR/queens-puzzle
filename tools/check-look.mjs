@@ -154,7 +154,7 @@ ok('叉的展位有两个：叉 / 点', ui.markIds.join() === 'x,dot', ui.markId
 ok('皇后的展位有两个：皇后 / 小猫', ui.pieceIds.join() === 'queen,cat', ui.pieceIds);
 ok('生命的展位有两个：红心 / 血条', ui.lifeIds.join() === 'heart,bar', ui.lifeIds);
 ok('点击特效的展位有两个：无 / 涟漪', ui.clickIds.join() === 'none,ripple', ui.clickIds);
-ok('背景的展位有两个：无 / 几何', ui.bgIds.join() === 'none,snow', ui.bgIds);
+ok('背景的展位有三个：无 / 几何 / 水面', ui.bgIds.join() === 'none,snow,tide', ui.bgIds);
 ok('棋盘滤镜的展位有两个：无 / 黑白', ui.filterIds.join() === 'none,mono', ui.filterIds);
 ok('默认选中纯色 + 叉 + 皇后 + 红心 + 三样动效都无',
   ui.checked.join() === 'plain,x,queen,heart,none,none,none', ui.checked);
@@ -166,7 +166,7 @@ ok('单插件的排不挂插件标签', ui.markSrcs.every(v => v === false));
 ok('展位有玻璃罩 / 顶灯 / 台面 / 反光 / 名牌 / 勾', ui.parts.every(Boolean), ui.parts);
 ok('名牌只写名字，没有描述',
   ui.plates.join() === '纯色,几何,自然,天空,贴纸,叉,点,皇后,小猫,红心,血条,' +
-    '无,涟漪,无,几何,无,黑白',
+    '无,涟漪,无,几何,水面,无,黑白',
   ui.plates.join());
 ok('标题写着当前用的样式',
   /纯色/.test(ui.nows[0]) && /叉/.test(ui.nows[1]) && /皇后/.test(ui.nows[2]),
@@ -227,7 +227,7 @@ ok('每排只有第一套开着，其余都锁着',
  * 不会变成「想关掉动效？先去抽奖」。 */
 ok('点击与背景：无开着、本体锁着（无永远免费）',
   locks.click.map(x => x.locked).join() === 'false,true' &&
-  locks.bg.map(x => x.locked).join() === 'false,true',
+  locks.bg.map(x => x.locked).join() === 'false,true,true',
   JSON.stringify([locks.click, locks.bg]));
 ok('锁着的展位都挂小锁，开着的不挂', flat.every(x => x.badge === x.locked));
 ok('aria-disabled 跟着锁走', flat.every(x => (x.aria === 'true') === x.locked));

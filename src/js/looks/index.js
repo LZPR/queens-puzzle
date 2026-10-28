@@ -77,6 +77,7 @@ import ripple from './ripple.js';
 import sky from './sky.js';
 import snow from './snow.js';
 import sticker from './sticker.js';
+import water from './water.js';
 
 /* 七类外观。key 是它存在 settings 里的字段，attr 是落到 <html> 上的钩子，
  * coll 是插件里那张表的字段名（`<名字>s` 的规矩，life 因此是 lifes）。 */
@@ -98,9 +99,10 @@ export var KINDS = ['surface', 'mark', 'piece', 'life', 'click', 'bg', 'filter']
  * 「墨线」排在最前：它给的「纯色」是出厂默认——格子就是一块干净的颜色，
  * 不加任何图案，开局最容易看清。四套图案主题跟在后面，都要抽奖拿。
  * 生命单独一个插件——它不在棋盘上，跟哪套纹样都没关系。
- * 最后三个是「动起来」的三样，各自只有一个插件；点击与背景都把「无」写在
- * 第一位，于是出厂就是安静的，涟漪与飘落成了奖品。 */
-var PLUGINS = [classic, geometry, nature, sky, sticker, life, ripple, snow, mono];
+ * 最后几样是「动起来」的三样，各自只有一个插件；点击与背景都把「无」写在
+ * 第一位，于是出厂就是安静的，涟漪与飘落 / 水面成了奖品。
+ * 水面排在「几何」后面：两套背景都是奖品，先来的那套排在展柜前面。 */
+var PLUGINS = [classic, geometry, nature, sky, sticker, life, ripple, snow, mono, water];
 
 /* ==========================================================
    登记：把插件摊平成四张表

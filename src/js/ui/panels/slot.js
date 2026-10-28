@@ -264,8 +264,15 @@ function symIcon(e) {
     return '<svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor" aria-hidden="true">' +
       '<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4"/></svg>';
   }
-  /* 背景动画：一枚三角压一枚方块，就是飘下来的那些形状 */
+  /* 背景动画：一枚三角压一枚方块，就是飘下来的那些形状；
+   * 水面换成两道路波形亮线 —— 同一排两套奖品，转轮上得认得出是哪一套 */
   if (e.kind === 'bg') {
+    if (o.id === 'tide') {
+      return '<svg viewBox="0 0 24 24" style="fill:none" aria-hidden="true">' +
+        '<path d="M2 9.4q2.5-2.2 5 0t5 0 5 0 5 0"/>' +
+        '<path d="M2 14.4q2.5-2.2 5 0t5 0 5 0 5 0" opacity=".6"/>' +
+        '<path d="M2 19.4q2.5-2.2 5 0t5 0 5 0 5 0" opacity=".35"/></svg>';
+    }
     return '<svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none" aria-hidden="true">' +
       '<path d="M9 3.4l5.4 9.2H3.6z" opacity=".85"/>' +
       '<rect x="12.6" y="12.6" width="7.6" height="7.6" rx="1.2" opacity=".5"/></svg>';

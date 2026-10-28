@@ -158,6 +158,16 @@ function preview(kind, o) {
 
   if (kind === 'bg') {
     if (o.id === 'none') return noneGlyph();
+    /* 水面：一格底下半盘水（波纹 + 水色），水上一圈泡沫 —— 「涨起来的水」
+     * 与「点下去溅的那一下」都在这一小格里说清了。 */
+    if (o.id === 'tide') {
+      return '<span class="pv-tile">' +
+        '<svg class="pv-tide" viewBox="0 0 52 52" aria-hidden="true">' +
+          '<path class="t-water" d="M0 25q5.2-7 10.4 0t10.4 0 10.4 0 10.4 0 10.4 0V52H0Z"/>' +
+          '<path class="t-line" d="M0 25q5.2-7 10.4 0t10.4 0 10.4 0 10.4 0 10.4 0"/>' +
+          '<path class="t-line t-line-b" d="M0 33q5.2-5 10.4 0t10.4 0 10.4 0 10.4 0 10.4 0"/>' +
+        '</svg></span>';
+    }
     /* 几何：几枚形状高低错落，看得出是「往下落的一片」 */
     return '<span class="pv-tile">' +
       '<svg class="pv-snow" viewBox="0 0 52 52" aria-hidden="true">' +

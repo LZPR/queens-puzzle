@@ -66,7 +66,18 @@
   pointer-events: none;
   /* 这一层故意**什么属性都不加**：filter / opacity / contain 任何一个
    * 都会把它变成一张 render surface，把里面的 14 个动画元素拍平、每帧重新合成
-   * —— 那样下面「逐枚模糊」就白省了。裁剪靠 overflow: hidden 已经够。 */
+   * —— 那样下面「逐枚模糊」就白省了。裁剪靠 overflow: hidden 已经够。
+   * 只放两个变量（变量不建渲染层）：--fill = 棋盘完成到什么程度，由 ui/effects.js
+   * 的 paintTide() 写上来；--amp = 水线最多离开静水面多少，水块让出这么多
+   * 上方给浪尖、也给 canvas 自己算高度（ui/effects.js 从量到的高度反推）。
+   *
+   * 水位的另外两截（--w-lo / --w-hi，ui/layout.js 按「色卡下沿 → 工具栏上沿」
+   * 量出来）**千万别在这一层写默认值**：写了就盖掉从 :root 继承来的那两个数，
+   * 水位从此永远是兜底值 —— 而兜底值在 390×844 上跟真值只差几像素，看着一切
+   * 正常，换到 320 宽才发现水涨到色卡后面去了。兜底只写在用它的那一条里
+   * （.w-rise 的 var(--w-lo, .07)）。 */
+  --fill: 0;
+  --amp: 24px;
 }
 
 .bg-s {
@@ -101,6 +112,185 @@
 .bg-circle { border-radius: 50%; }
 .bg-hex { clip-path: polygon(25% 3%, 75% 3%, 97% 50%, 75% 97%, 25% 97%, 3% 50%); }
 
+/* ============================================================
+   三、水面（背景动画的第二档「水面」）
+   ------------------------------------------------------------
+   整页是一池浅水。水位（--level，0–1 = 水面在屏幕的百分之几处）是两件事的
+   乘积：**棋盘完成到什么程度**（--fill，ui/effects.js 数 marks：涂了多少格
+   与放了几颗皇后取并集 —— 放满 n 颗皇后就是满水，也就是解开那一刻）与
+   **空档在哪儿**（--w-lo / --w-hi，ui/layout.js 量「色卡下沿 → 工具栏上沿」）。
+   空盘时水面停在空档的三成处（留一池看得见的水 —— 水面是能点的，全藏到工具栏
+   底下就成了一片空白），填满时涨到色卡下沿 —— 也就那一条空白是水的舞台，
+   再往上全被不透明的东西挡住了。
+
+   markup（effects.js 的 tideField）从外到里：
+
+    .w-wash  铺满视口的一层极淡的水色 —— 它不跟水位走。有这一层，
+              「整页都是水」才成立，点屏幕顶上也算点在水里；
+    .w-rise  水位本身：translateY 把整块水推到 --level 那一行；
+      .w-sway  整块水极慢地上下浮 2.5px（宁静的那口气）
+        .w-deep   水（从水面往下的渐变，越深越蓝）
+        .w-swell  水面下两团更亮的水，慢慢横移
+        .w-glint  两道反光
+        .w-surf   水面那条线（canvas，每帧重画，见下）
+
+   五条规矩（改之前先认）：
+   · 水位涨落走 **transform**，不走 height —— 涨落是合成层的事，不触发布局；
+   · 除了那条水线，其余会动的只动 transform / opacity，波形 / 渐变都是**静态纹理**
+     （背景贴图 + data-uri 的 SVG），一轮动画只是把同一张纹理平移；
+   · 这条水线是唯一每帧重绘的东西，所以它被关在一块 2×--amp 高的小画布里
+     （390×48），绝不整屏重绘；
+   · 这一层仍旧挂在 .bg-fx（z-index: -1）里：棋盘 / 色卡 / 工具栏全压在它上面，
+     它不吃点击，也不给谁让位；
+   · 颜色刻意压得淡（水色 alpha 最高 .54，叠在米色纸上仍是浅水）：棋盘上那 18 块淡彩才是主角，
+     水面是**垫在下面的环境**，不是第二块调色板。
+   ============================================================ */
+.w-wash {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    rgba(142, 201, 210, .07) 0%,
+    rgba(132, 194, 206, .105) 55%,
+    rgba(124, 188, 202, .13) 100%);
+}
+
+/* 整块水往下推 (1 - level)：它的上沿正好落在 --level 那一行。
+   过渡只在水位真的变时才播（换盘、落子），且是合成层的插值，不卡。
+
+   --level 不写死、也不由 js 给：它是「布局量出来的空档」（--w-lo / --w-hi，
+   见 ui/layout.js）与「棋盘完成度」（--fill，见 ui/effects.js）之间的一次映射。
+   于是在 320 的小屏和 414 的大屏上，「满水」都停在各自色卡的下沿。 */
+.w-rise {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100%;
+  --level: calc(var(--w-lo, .07) + (var(--w-hi, .29) - var(--w-lo, .07)) * var(--fill, 0));
+  transform: translate3d(0, calc((1 - var(--level)) * 100%), 0);
+  transition: transform .62s cubic-bezier(.33, .06, .2, 1);
+  will-change: transform;
+}
+
+.w-sway {
+  position: absolute;
+  inset: 0;
+  animation: wSway 13s ease-in-out infinite;
+}
+
+/* 只往上浮、且只浮 2.5px：水块本身比视口高（永远有 level 那么一截在屏幕外），
+   所以往上浮也露不出底。 */
+@keyframes wSway {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -2.5px, 0); }
+}
+
+/* 水本身。渐变按「离水面多远」排：0% 是静水面往下 --amp 那一行，于是水位越高，
+   屏幕底下看到的那一截越靠后 → 水越深越蓝，正是「涨潮」该有的样子。
+
+   上沿让出 --amp：上面那一条是给浪尖翻上来的地方，由 .w-surf 那张 canvas
+   补齐。两截的颜色在 --amp 那一行严格对齐（canvas 渐变的最末一个色标 =
+   这里的第一个色标），否则水面上会横着一条缝。 */
+.w-deep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--amp, 24px);
+  bottom: 0;
+  background: linear-gradient(180deg,
+    rgba(140, 203, 214, .30) 0%,
+    rgba(122, 190, 208, .42) 10%,
+    rgba(104, 172, 198, .50) 24%,
+    rgba(94, 160, 190, .54) 100%);
+}
+
+/* ---- 水面那条线 ----
+   一块只有 2×--amp 高的小画布，压在水块（.w-deep）的上沿：上面一半是空气，
+   波峰从那儿冒出去；下面一半是水线下沉的地方。
+
+   为什么非得用 canvas：这条线每一帧的形状都不一样 —— 是波动方程算出来的，
+   不是一张波形图在平移。贴图的顶多是「水纹在滚」，看着不像水在动。
+   代价被摁在很小一头：390×48 的一张位图，每帧三十来个 lineTo，
+   GPU 上传几十 KB —— 比让浏览器重绘一屏便宜得多。 */
+.w-surf {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--amp, 24px) * -1);
+  width: 100%;
+  height: calc(var(--amp, 24px) * 2);
+  display: block;
+  /* 只是个画布：不吃点击（外面那层已经 pointer-events: none，这里是双保险） */
+  pointer-events: none;
+}
+
+/* ---- 漂移的贴图 ----
+   一块比视口宽两个 tile 的条子，从 0 平移到 -tile（或反过来）：同一张纹理
+   平移一整个周期，看起来是水在流，而浏览器只是把一层缓好的纹理挪个位置。
+   --tile 必须等于那张 SVG 的**原始宽度**（background-size 一律 auto，别缩放），
+   否则循环会「跳」一下，而且平铺的边上会多出一条采样的缝。 */
+.w-swell {
+  position: absolute;
+  left: calc(var(--tile, 150px) * -1);
+  width: calc(100% + var(--tile, 150px) * 2);
+  background-repeat: repeat-x;
+  background-position: 0 0;
+  will-change: transform;
+}
+
+@keyframes wDriftL {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(calc(var(--tile, 150px) * -1), 0, 0); }
+}
+@keyframes wDriftR {
+  from { transform: translate3d(calc(var(--tile, 150px) * -1), 0, 0); }
+  to   { transform: translate3d(0, 0, 0); }
+}
+
+/* 水面下的两团亮水：白的一层压在水色上只是「水不均匀」。
+ *
+ * 两条经验（都是画出来才发现的）：
+ * · 填充必须**竖向渐隐到 0**，不能一刀切到底边 —— 平铺的白色一旦有硬边，
+ *   水面上就会浮出一条笔直的横线，看着像贴纸接缝；
+ * · background-size 一律等于 SVG 的原尺寸，**不要让浏览器缩放**：缩放 + 平铺
+ *   会在每一块的边上来一次双线性采样，一段一段的竖缝就是这么来的。
+ *   要换个周期就另画一张（下面 s2 / l2 各有一张 210 宽的）。 */
+.w-swell {
+  height: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='34' viewBox='0 0 150 34'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23FFFFFF' stop-opacity='.20'/%3E%3Cstop offset='1' stop-color='%23FFFFFF' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0,12q37.5,-7,75,0q37.5,7,75,0L150,34L0,34Z' fill='url(%23g)'/%3E%3C/svg%3E");
+}
+.w-swell.s1 { top: 5px; animation: wDriftL 27s linear infinite; }
+/* 第二团换个周期（210）与方向：两条纹理错开，才不像一条带子在滚 */
+.w-swell.s2 {
+  --tile: 210px;
+  top: 9px;
+  height: 46px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='210' height='46' viewBox='0 0 210 46'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23FFFFFF' stop-opacity='.16'/%3E%3Cstop offset='1' stop-color='%23FFFFFF' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0,14q52.5,-8,105,0q52.5,8,105,0L210,46L0,46Z' fill='url(%23g)'/%3E%3C/svg%3E");
+  opacity: .8;
+  animation: wDriftR 41s linear infinite;
+}
+
+/* ---- 两道反光 ----
+   水面上那一小段亮。只有 opacity 与很短的横移，比水线还慢。 */
+.w-glint {
+  position: absolute;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, .55) 50%,
+    rgba(255, 255, 255, 0) 100%);
+  will-change: transform, opacity;
+  animation: wGlint 11s ease-in-out infinite;
+}
+.w-glint.g1 { top: 6.5%; left: 5%; width: 44%; }
+.w-glint.g2 { top: 15%; left: 42%; width: 34%; animation-duration: 17s; animation-delay: -6s; }
+
+@keyframes wGlint {
+  0%, 100% { transform: translate3d(-7%, 0, 0) scaleX(.82); opacity: .22; }
+  50%      { transform: translate3d(7%, 0, 0) scaleX(1.08); opacity: .68; }
+}
+
 /* 设置里的「模糊背景」：给背景加一道纱。
  *
  * 关键：**糊的是每一枚，不是整层**。
@@ -120,9 +310,26 @@ html.is-blur-bg .bg-s {
   filter: blur(3.5px);
 }
 
-/* 系统要求少动画时：这一层根本不会被建出来（ui/effects.js 里就返回了），
-   这条只是兜底 —— 万一是运行中改的系统设置，也让它们别再动。 */
+/* 水面不吃这道 blur，改成「退后一档」：水块本身就是渐变 + 淡贴图，
+ * 再套 filter 等于把一整屏的合成层每帧重新模糊一遍（跟上面那段的道理一样，
+ * 而且这次还是全屏）。要的效果是「背景别抢戏」，那就直接压浓度——
+ * 只压静态的 .w-deep / .w-wash，两道反光也跟着淡一档，因为是它们最亮。
+ * 水线那块 canvas 必须跟 .w-deep 压到**同一个数**（.8）：两截在 --amp 那一行
+ * 是严丝合缝拼起来的，一边淡一边不淡，水面上就横着一条缝。 */
+html.is-blur-bg .w-wash { opacity: .75; }
+html.is-blur-bg .w-deep { opacity: .8; }
+html.is-blur-bg .w-surf { opacity: .8; }
+html.is-blur-bg .w-glint { opacity: .45; }
+
+/* 系统要求少动画时：背景层根本不会被建出来（ui/effects.js 里就返回了），
+   这几条只是兜底 —— 万一是运行中改的系统设置，也让它们别再动。
+   --amp 归零是关键：水块上沿要让回去（本来让出那一条是给浪尖的），
+   不然水面会凭空缺一截，下面半透明地露着纸。 */
 @media (prefers-reduced-motion: reduce) {
+  .bg-fx { --amp: 0px; }
   .bg-s { animation: none; opacity: 0; }
   .fx-rip { display: none; }
+  .w-surf { display: none; }
+  .w-sway, .w-swell, .w-glint { animation: none; }
+  .w-rise { transition: none; }
 }

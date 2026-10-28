@@ -15,6 +15,7 @@ import { FORCED_COL, FORCED_REGION, FORCED_ROW, badRegions, computeAuto, compute
 import { updateHint } from './hint.js';
 import { syncLives } from './lives.js';
 import { paintHudLabel } from './difficulty.js';
+import { updateWater } from './effects.js';
 import { fadeCell, settleFade } from './fade.js';
 
 /* ==========================================================
@@ -108,6 +109,10 @@ export function render(anim) {
   drawLinks(showConflict ? cf : { pairs: [], cells: new Set(), count: 0 });
   updateHint();
   updateStats();
+  /* 水面（外观里的背景那一档）：水位跟着棋盘的填充程度走。
+   * 放在这里是因为「棋盘变了」只有这一条路 —— 落子 / 涂抹 / 撤销 / 重做 /
+   * 一键补齐 / 换盘最后都走到 render()。没开水面时它什么都不做。 */
+  updateWater();
 
   if (anim && cf.count > view.lastConflictCount) {
     sfx('conflict');

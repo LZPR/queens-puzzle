@@ -264,6 +264,273 @@ await sleep(250);
 ok('换回来就接着飘',
   await page.evaluate(() => document.querySelector('.bg-fx').hidden === false));
 
+// ---------- 3.5 水面 ----------
+console.log('\n--- 3.5 水面：水位跟着填充走 ---');
+// 水面也是奖品：先发下来再选上
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.lookUnlock('bg', 'tide');
+  d.openLook();
+});
+await sleep(350);
+await page.evaluate(() => document.querySelector('#bgRow [data-bg="tide"]').click());
+await sleep(300);
+await page.evaluate(() => __QUEENS_DEBUG__.closeLook());
+await sleep(500);
+
+/* 空盘：水面贴在工具栏上方那一条水带里 */
+async function tideState() {
+  return page.evaluate(() => {
+    const layer = document.querySelector('.bg-fx');
+    const rise = document.querySelector('.w-rise');
+    const band = document.getElementById('regions').getBoundingClientRect().bottom;
+    const bar = document.getElementById('toolbar').getBoundingClientRect().top;
+    return {
+      hidden: layer.hidden,
+      fill: parseFloat(getComputedStyle(layer).getPropertyValue('--fill')) || 0,
+      surface: Math.round(rise.getBoundingClientRect().top),
+      paletteBottom: Math.round(band),
+      toolbarTop: Math.round(bar),
+      vh: window.innerHeight
+    };
+  });
+}
+
+/* 水线探针：扫 canvas 的像素，每列找最亮的那一行 —— 那就是白亮的水线。
+ * 返回值一律换算成 CSS px。span 是整条线的起伏幅度：静止时只剩环境呼吸
+ * （两三像素），点一下能到十五像素以上。 */
+const lineProbe = () => page.evaluate(() => {
+  const cv = document.querySelector('.w-surf');
+  if (!cv) return null;
+  const g = cv.getContext('2d');
+  const w = cv.width, h = cv.height;
+  const d = g.getImageData(0, 0, w, h).data;
+  const cssH = cv.getBoundingClientRect().height;
+  const dpr = cssH ? h / cssH : 1;
+  const ys = [];
+  for (let c = 0; c < 9; c++) {
+    const x = Math.min(w - 1, Math.round((c + 0.5) / 9 * w));
+    let best = -1, by = 0;
+    for (let y = 0; y < h; y++) {
+      const i = (y * w + x) * 4;
+      const lum = d[i] * 0.3 + d[i + 1] * 0.6 + d[i + 2] * 0.1 + d[i + 3] * 0.5;
+      if (lum > best) { best = lum; by = y; }
+    }
+    ys.push(+(by / dpr).toFixed(1));
+  }
+  return {
+    ys,
+    w, h, dpr,
+    cssW: Math.round(cv.getBoundingClientRect().width),
+    cssH: Math.round(cssH),
+    mid: +(cssH / 2).toFixed(1),
+    span: +(Math.max(...ys) - Math.min(...ys)).toFixed(1),
+    mean: +(ys.reduce((a, b) => a + b, 0) / ys.length).toFixed(1)
+  };
+});
+
+/* 水面这一层：一块 wash + 一块水 + 两团涌 + 两块反光 + 一块 canvas 水线 */
+const tideEmpty = await page.evaluate(() => {
+  const layer = document.querySelector('.bg-fx');
+  const cv = document.querySelector('.bg-fx .w-surf');
+  const swells = [...document.querySelectorAll('.bg-fx .w-swell')];
+  const cs = getComputedStyle(layer);
+  return {
+    hidden: layer.hidden,
+    wash: !!document.querySelector('.bg-fx .w-wash'),
+    deep: !!document.querySelector('.bg-fx .w-deep'),
+    swells: swells.length,
+    // 水团仍在跑漂移动画（水在流）
+    anims: swells.map(e => getComputedStyle(e).animationName),
+    canvas: document.querySelectorAll('.bg-fx canvas').length,
+    surf: cv ? {
+      w: Math.round(cv.getBoundingClientRect().width),
+      h: Math.round(cv.getBoundingClientRect().height),
+      // 水线那块画布必须让开顶部 --amp，才能既画浪尖又不缺一截水
+      top: Math.round(cv.getBoundingClientRect().top),
+      pe: getComputedStyle(cv).pointerEvents
+    } : null,
+    amp: cs.getPropertyValue('--amp').trim(),
+    z: cs.zIndex,
+    pe: cs.pointerEvents
+  };
+});
+ok('选水面：背景层建出来，一层水色 + 一块水 + 两团涌 + 一块水线画布',
+  tideEmpty.hidden === false && tideEmpty.wash && tideEmpty.deep &&
+  tideEmpty.swells === 2 && tideEmpty.canvas === 1 && !!tideEmpty.surf,
+  `${tideEmpty.swells} 水团 / canvas=${tideEmpty.canvas}`);
+ok('水团还在跑漂移动画（水在流，不是一张静止的图）',
+  tideEmpty.anims.join() === 'wDriftL,wDriftR', tideEmpty.anims);
+ok('水线画布宽满屏、高 = 2×--amp（--amp 让给浪尖），不挡点击',
+  tideEmpty.amp === '24px' && tideEmpty.surf.w >= 300 &&
+  tideEmpty.surf.h === 48 && tideEmpty.surf.pe === 'none',
+  [tideEmpty.amp, tideEmpty.surf.w, tideEmpty.surf.h, tideEmpty.surf.pe]);
+ok('水面那一层仍旧在内容之下、不吃点击',
+  tideEmpty.z === '-1' && tideEmpty.pe === 'none', [tideEmpty.z, tideEmpty.pe]);
+
+const t0 = await tideState();
+/* 空盘也留一池水（空档的三成）：水面是能点的，全藏到工具栏底下就成空白了 */
+const bandH = t0.toolbarTop - t0.paletteBottom;
+ok('空盘：屏幕底下仍留一池水（不会整条藏到按钮底下）',
+  t0.surface < t0.toolbarTop - 24 &&
+  t0.surface > t0.toolbarTop - bandH * 0.5,
+  `surface=${t0.surface} toolbar=${t0.toolbarTop} band=${bandH}`);
+await page.screenshot({ path: SHOTS + 'fx-6-tide-low.png' });
+
+/* 涂一半：水位升上去（过渡 0.62s，等它走完再量） */
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__, n = d.state.size;
+  for (let i = 0; i < n * n; i++) d.state.marks[i] = (i % 2 === 0) ? 1 : 0;
+  d.render();
+});
+await sleep(800);
+const t1 = await tideState();
+ok('棋盘涂一半：水面升起来（transform 抬高了整块水）',
+  t1.fill > 0.45 && t1.fill < 0.55 && t1.surface < t0.surface - 40,
+  `fill=${t1.fill} ${t0.surface}→${t1.surface}`);
+await page.screenshot({ path: SHOTS + 'fx-6-tide-mid.png' });
+
+/* 涂满：水面涨到色卡下沿，再高就糊住色卡了 */
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__, n = d.state.size;
+  for (let i = 0; i < n * n; i++) d.state.marks[i] = 1;
+  d.render();
+});
+await sleep(800);
+const t2 = await tideState();
+ok('涂满：水面涨到色卡下沿（不糊住色卡，也不涨进棋盘）',
+  t2.fill === 1 && t2.surface < t1.surface - 40 &&
+  t2.surface > t2.paletteBottom - 8 && t2.surface < t2.paletteBottom + 8,
+  `surface=${t2.surface} palette=${t2.paletteBottom}`);
+await page.screenshot({ path: SHOTS + 'fx-6-tide-high.png' });
+
+/* 清空：水位跟着落回去 */
+await page.evaluate(() => __QUEENS_DEBUG__.clear());
+await sleep(800);
+const t3 = await tideState();
+ok('清空棋盘：水位退回最低（跟着局面走，不是只涨不落）',
+  t3.fill === 0 && Math.abs(t3.surface - t0.surface) <= 2, `${t3.surface} vs ${t0.surface}`);
+
+// ---- 水线本身：波动方程在跑 ----
+console.log('\n--- 3.6 水线：点一下水面被按下去，波跑开再静下来 ---');
+await sleep(600);
+const rest = await lineProbe();
+ok('静水：水线是活的（环境呼吸 1–6px），但整体还在中线附近',
+  rest && rest.span >= 0.8 && rest.span <= 8 &&
+  Math.abs(rest.mean - rest.mid) <= 6,
+  rest && `span=${rest.span} mean=${rest.mean} mid=${rest.mid}`);
+
+/* 点在水面左 1/4 处：那一段被压下去（y 变大 = 往下），两侧顶起来 */
+const poke = await page.evaluate(() => {
+  const r = document.querySelector('.w-surf').getBoundingClientRect();
+  return {
+    x: Math.round(r.left + r.width * 0.25),
+    y: Math.round(r.top + r.height * 0.5)
+  };
+});
+await page.mouse.click(poke.x, poke.y);
+await sleep(90);
+const hit = await lineProbe();
+/* 点在水面左 1/4：那一段被压下去（y 变大 = 往下），整条线的最低点也该落在左半 */
+const leftMax = arr => Math.max(...arr.slice(0, 4));
+const deepest = hit ? hit.ys.indexOf(Math.max(...hit.ys)) : -1;
+ok('点一下：水线在按的位置被压下去（左半明显低于按之前）',
+  hit && leftMax(hit.ys) > leftMax(rest.ys) + 5 && deepest <= 4,
+  hit && `按前 ${rest.ys.slice(0, 4)} → 按后 ${hit.ys.slice(0, 4)}，最低点在 #${deepest}`);
+ok('点一下：整条线被掀起来（起伏幅度从两三像素涨到十像素以上）',
+  hit && hit.span > rest.span + 8 && hit.span > 11,
+  hit && `${rest.span} → ${hit.span}`);
+await page.screenshot({ path: SHOTS + 'fx-7-tide-poke.png' });
+
+/* 波往两边跑：同一时刻的剖面在变（凹陷挪位、两侧冒峰） */
+await sleep(300);
+const spread = await lineProbe();
+const moved = spread && spread.ys.reduce((m, y, i) => Math.max(m, Math.abs(y - hit.ys[i])), 0);
+ok('波在跑：0.3 秒后同一条线的形状已经变了（不是原地上下抖）',
+  moved >= 6, spread && `最大位移 ${moved.toFixed(1)}px`);
+await page.screenshot({ path: SHOTS + 'fx-7-tide-spread.png' });
+
+/* 两三秒后自己静下来：阻尼把能量收掉，水面回到中线 */
+await sleep(2600);
+const calm = await lineProbe();
+ok('两三秒后自己静下来（波不会一直荡），水面回到中线附近',
+  calm && calm.span < 8 && Math.abs(calm.mean - calm.mid) <= 6,
+  calm && `span=${calm.span} mean=${calm.mean} mid=${calm.mid}`);
+
+/* 浮层里的点击不掀水：点面板自己的按钮不该顺手把水面推一下 */
+await page.evaluate(() => __QUEENS_DEBUG__.openLook());
+await sleep(400);
+const sheetPos = await page.evaluate(() => {
+  const r = document.querySelector('#lookSheet .sheet-head').getBoundingClientRect();
+  return { x: Math.round(r.left + 40), y: Math.round(r.top + r.height / 2) };
+});
+await page.mouse.click(sheetPos.x, sheetPos.y);
+await sleep(120);
+const inSheet = await lineProbe();
+ok('浮层里的点击不掀水（面板归面板）',
+  inSheet && inSheet.span < 8, inSheet && `span=${inSheet.span}`);
+await page.keyboard.press('Escape');
+await sleep(320);
+
+/* ---- 放皇后也算完成（水面跟着「解到哪一步」涨） ----
+ * 真正的解题动作是放皇后，一盘 8×8 放满也才 8 格 —— 只按「涂了多少格」算，
+ * 解完水面还贴着底。这里验证：放几颗就涨几成，放满 n 颗就是满水。 */
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__, n = d.state.size;
+  for (let i = 0; i < n * n; i++) d.state.marks[i] = 0;
+  const sol = d.state.solution;            // solution[row] = 这一行该放哪一列
+  for (let r = 0; r < 3; r++) d.state.marks[r * n + sol[r]] = 2;
+  d.render();
+});
+await sleep(800);
+const q3 = await tideState();
+ok('放 3 颗皇后：水面自己涨起来（没涂一格，水位离底）',
+  q3.fill >= 3 / 8 && q3.fill < 0.46 && q3.surface < t0.surface - 30,
+  `fill=${q3.fill}（3/8 = ${(3 / 8).toFixed(3)}，另有 3 格涂色的零头）surface=${q3.surface} vs 空盘 ${t0.surface}`);
+
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__, n = d.state.size;
+  const sol = d.state.solution;
+  for (let r = 0; r < n; r++) d.state.marks[r * n + sol[r]] = 2;
+  d.render();
+});
+await sleep(800);
+const qAll = await tideState();
+ok('放满 n 颗（解开那一刻）：水面正好涨到色卡下沿',
+  qAll.fill === 1 && qAll.surface > qAll.paletteBottom - 8 &&
+  qAll.surface < qAll.paletteBottom + 8,
+  `fill=${qAll.fill} surface=${qAll.surface} palette=${qAll.paletteBottom}`);
+
+/* 撤掉一颗：跟着落回去（不是只涨不落） */
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__, n = d.state.size;
+  const sol = d.state.solution;
+  for (let r = 4; r < n; r++) d.state.marks[r * n + sol[r]] = 0;
+  d.render();
+});
+await sleep(800);
+const q4 = await tideState();
+ok('撤掉一半皇后：水面跟着落回去',
+  q4.fill >= 0.5 && q4.fill < 0.58 && q4.surface > qAll.surface + 30,
+  `fill=${q4.fill} surface=${q4.surface}`);
+await page.evaluate(() => __QUEENS_DEBUG__.clear());
+await sleep(800);
+
+/* 换回「几何」：水块与引擎一起收掉，不白挂一趟每帧都跑的循环 */
+await page.evaluate(() => __QUEENS_DEBUG__.openLook());
+await sleep(350);
+await page.evaluate(() => document.querySelector('#bgRow [data-bg="snow"]').click());
+await sleep(300);
+await page.evaluate(() => __QUEENS_DEBUG__.closeLook());
+await sleep(300);
+const tideOff = await page.evaluate(() => ({
+  surf: document.querySelectorAll('.bg-fx .w-surf').length,
+  water: document.querySelectorAll('.bg-fx .w-rise').length,
+  snow: document.querySelectorAll('.bg-fx .bg-s').length
+}));
+ok('换回几何：水块与水线画布都收掉了（波动引擎跟着停）',
+  tideOff.surf === 0 && tideOff.water === 0 && tideOff.snow === 14, tideOff);
+
 // ---------- 4. 棋盘滤镜 ----------
 console.log('\n--- 4. 棋盘滤镜只罩棋盘 ---');
 // 「黑白」是奖品，先发下来
@@ -412,7 +679,7 @@ const unlocked = await page.evaluate(() => {
     ledger: localStorage.getItem('queens.looks.v1')
   };
 });
-ok('十七个展位全部解锁', unlocked.total === 17 && unlocked.locked === 0, unlocked);
+ok('十八个展位全部解锁', unlocked.total === 18 && unlocked.locked === 0, unlocked);
 ok('小锁一个都不露', unlocked.badges === 0, unlocked.badges);
 ok('临时解锁不写账本', unlocked.ledger === beforeLedger, [beforeLedger, unlocked.ledger]);
 // 能直接选上「黑白」并落地（真账本里它还锁着，这一趟说了算）
@@ -464,6 +731,31 @@ ok('少动画：设置里仍是涟漪 / 飘落，但背景层根本不建',
   JSON.stringify(reduced.look) + ' hasBg=' + reduced.hasBg);
 ok('少动画时点格子没有涟漪',
   await page.evaluate(() => document.querySelectorAll('.fx-rip').length) === 0);
+
+/* 水面也一样：少动画时整块水都不建，水线画布更不会有 */
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.lookUnlock('bg', 'tide');
+  d.settings.bgStyle = 'tide';
+  localStorage.setItem('queens.settings.v1',
+    JSON.stringify(Object.assign({ sv: 2 }, d.settings)));
+});
+await boot();
+const reducedTide = await page.evaluate(() => {
+  const cell = document.querySelectorAll('.cell')[9];
+  const r = cell.getBoundingClientRect();
+  return {
+    bg: __QUEENS_DEBUG__.look().bg,
+    water: document.querySelectorAll('.w-rise, .w-wash').length,
+    surf: document.querySelectorAll('.w-surf').length,
+    x: r.left + r.width / 2, y: r.top + r.height / 2
+  };
+});
+await page.mouse.click(reducedTide.x, reducedTide.y);
+await sleep(180);
+ok('少动画：水面设着也不建水块、更不会有水线画布',
+  reducedTide.bg === 'tide' && reducedTide.water === 0 && reducedTide.surf === 0,
+  JSON.stringify(reducedTide));
 await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
 
 // ---------- 汇总 ----------
