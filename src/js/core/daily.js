@@ -12,7 +12,8 @@
  * 五挡的规矩（玩家改不了，见 requirement）：
  *   棋盘 = 这一挡能开的最大盘（借 DIFF_BANDS 的 hi，别另写一份尺寸）
  *   限时 = 3 / 5 / 10 / 15 / 20 分钟
- *   步数不限 · 禁用提示 · 可以撤销 · 禁用记录点 · 标错扣 3 条命
+ *   限步 = 60 / 100 / 150 / 250 / 400 步（跟限时同一条链，一挡比一挡宽）
+ *   禁用提示 · 可以撤销 · 记录点可用 · 标错不惩罚
  *   完成任意一挡就算完成今日挑战（五挡是同一天里可选的五个尺寸，不是五道关卡）；
  *   解锁链照旧，完成前一挡才开下一挡。
  *
@@ -24,8 +25,10 @@ import { DIFF_BANDS, STORE_DAILY } from './config.js';
 /** 五挡，顺序就是解锁顺序。跟 DIFF_BANDS 的键是同一套（难度 v3 起多了「较难」）。 */
 export var DAILY_TIERS = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
 
-/** 每日挑战写死的命数：标错惩罚固定 3 条。 */
-export var DAILY_LIVES = 3;
+/* 每挡给多少步：跟限时同一套节奏（3/5/10/15/20 分钟 → 60/100/150/250/400 步），
+ * 数值取自 config.js 的 STEP_OPTIONS（挑挡位时那排按钮就是这几个数）——
+ * 改这里先看那边有没有同一挡，别两边各说一套。 */
+var TIER_STEPS = { easy: 60, mid: 100, advanced: 150, hard: 250, extreme: 400 };
 
 /* 每挡多久：容易到极难 3 → 20 分钟，一挡比一挡宽。 */
 var TIER_MS = { easy: 180000, mid: 300000, advanced: 600000, hard: 900000, extreme: 1200000 };
@@ -59,11 +62,15 @@ function validKey(key) {
 /* ==========================================================
    规矩
    ========================================================== */
-/** 某一挡的规矩：棋盘固定这一档能开的最大盘，限时按档位。 */
+/** 某一挡的规矩：棋盘固定这一档能开的最大盘，限时与限步都按档位。 */
 export function ruleOf(tier) {
   var b = DIFF_BANDS[tier];
   if (!b) return null;
-  return { tier: tier, size: b.hi, limit: TIER_MS[tier] || 0 };
+  return {
+    tier: tier, size: b.hi,
+    limit: TIER_MS[tier] || 0,
+    steps: TIER_STEPS[tier] || 0
+  };
 }
 
 /** 交给 app/puzzle.js 的 applyBoard 的那一包「本局规矩」。
@@ -73,11 +80,11 @@ export function rulesFor(day, tier) {
   if (!r) return null;
   return {
     timeLimit: r.limit,
-    stepLimit: 0,
-    lifeLimit: DAILY_LIVES,
+    stepLimit: r.steps,
+    lifeLimit: 0,        // 标错不惩罚：放错的皇后亮冲突线，自己擦掉就行
     noHint: true,
     noUndo: false,
-    noSnap: true,
+    noSnap: false,       // 记录点可用（只有「禁用提示」这一把锁了）
     daily: { day: day, tier: tier }
   };
 }

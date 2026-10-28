@@ -6,8 +6,8 @@
  *
  * 规矩：
  *   · 两种玩法（自定义 / 每日挑战）在面板顶上切；挑战组可折叠，选每日自动摊开
- *   · 每日挑战的每一项都锁死：棋盘 = 该挡最大盘、限时按挡位、步数不限、
- *     禁用提示、可以撤销、禁用记录点、标错 3 条命
+ *   · 每日挑战的每一项都锁死：棋盘 = 该挡最大盘、限时与限步都按挡位、
+ *     禁用提示、可以撤销、记录点可用、标错不惩罚
  *   · 难度五挡（容易→中等→较难→困难→极难），完成前一挡才解锁下一挡；
  *     打完任意一挡就算完成今日挑战
  *   · 同一挡的棋盘只跟日期有关：打两次拿到的是同一盘；只写内存里的状态，
@@ -184,16 +184,16 @@ ok('步进器按不动', p.sizeMinus && p.sizePlus);
 ok('常用尺寸那一行收起', p.quickHidden);
 ok('限时固定 3 分', p.limitOn.join() === '3 分', p.limitOn);
 ok('限时挡位全灰', p.limitAllDisabled);
-ok('步数固定「不限」', p.stepOn.join() === '不限', p.stepOn);
-ok('标错固定 3 条', p.lifeOn.join() === '3 条', p.lifeOn);
+ok('步数固定 60 步', p.stepOn.join() === '60 步', p.stepOn);
+ok('标错固定「不惩罚」', p.lifeOn.join() === '不惩罚', p.lifeOn);
 ok('标错挡位全灰', p.lifeAllDisabled);
-ok('禁用提示开 / 撤销关 / 记录点开',
-  p.noHint === 'true' && p.noUndo === 'false' && p.noSnap === 'true',
+ok('禁用提示开 / 撤销关 / 记录点可用',
+  p.noHint === 'true' && p.noUndo === 'false' && p.noSnap === 'false',
   `${p.noHint}/${p.noUndo}/${p.noSnap}`);
 ok('三颗开关都锁着', p.switchesLocked);
 ok('说明写明「固定限时 3 分钟」', /固定限时 3 分钟/.test(p.limitHint), p.limitHint);
-ok('说明写明不限步数', /不限步数/.test(p.stepHint), p.stepHint);
-ok('说明写明扣 3 条', /3 条/.test(p.lifeHint), p.lifeHint);
+ok('说明写明固定限步 60 步', /固定限步 60 步/.test(p.stepHint), p.stepHint);
+ok('说明写明不惩罚标错', /不惩罚/.test(p.lifeHint), p.lifeHint);
 ok('难度那行说清解锁关系', /解锁/.test(p.diffHint), p.diffHint);
 ok('尺寸那行说是最大盘', /5×5/.test(p.sizeHint), p.sizeHint);
 ok('按钮变成「开始今日挑战」', p.shuffle === '开始今日挑战', p.shuffle);
@@ -216,9 +216,10 @@ let g = await game();
 const today = await st();
 ok('装上 5×5', g.n === 5, g.n);
 ok('限时 3 分钟', g.limit === 180000, g.limit);
-ok('步数不限 / 标错 3 条 / 满血', g.stepLimit === 0 && g.lifeLimit === 3 && g.lives === 3,
+ok('限步 60 / 标错不惩罚 / 没有命',
+  g.stepLimit === 60 && g.lifeLimit === 0 && g.lives === 0,
   `${g.stepLimit}/${g.lifeLimit}/${g.lives}`);
-ok('提示锁 / 记录点锁 / 撤销开着', g.hintDisabled && g.snapLocked && !g.undoLocked,
+ok('提示锁 / 记录点可用 / 撤销开着', g.hintDisabled && !g.snapLocked && !g.undoLocked,
   `${g.hintDisabled}/${g.snapLocked}/${g.undoLocked}`);
 ok('这一局记着是每日挑战', g.daily && g.daily.day === today.day && g.daily.tier === 'easy',
   JSON.stringify(g.daily));
@@ -423,8 +424,9 @@ await sleep(320);
 p = await panel();
 ok('面板五挡都能点', p.diffs.filter(d => d.lv !== 'any').every(d => !d.dis), p.diffs);
 ok('默认停在还没完成的「极难」', p.diffs.some(d => d.lv === 'extreme' && d.on), p.diffs);
-ok('极难 = 16×16 + 20 分钟', p.sizeVal === '16' && p.limitOn.join() === '20 分',
-  p.sizeVal + '/' + p.limitOn);
+ok('极难 = 16×16 + 20 分钟 + 400 步',
+  p.sizeVal === '16' && p.limitOn.join() === '20 分' && p.stepOn.join() === '400 步',
+  p.sizeVal + '/' + p.limitOn + '/' + p.stepOn);
 ok('面板说今天已完成', /今日已完成/.test(p.note), p.note);
 /* 停在还没打完的「极难」上：这一天虽然已经算完成，但这一挡还是第一次打 */
 ok('按钮是「开始今日挑战」（极难还没打过）', p.shuffle === '开始今日挑战', p.shuffle);
@@ -449,9 +451,10 @@ const back = await game();
 ok('刷新后还是 8×8 的每日挑战',
   back.n === 8 && !!back.daily && back.daily.tier === 'mid', JSON.stringify(back.daily));
 ok('盘面没变', back.regions === beforeReload.regions);
-ok('限时与三把锁都还在',
-  back.limit === 300000 && back.noHint === true && back.noUndo === false && back.noSnap === true,
-  `${back.limit}/${back.noHint}/${back.noUndo}/${back.noSnap}`);
+ok('限时 / 限步与两把锁都还在',
+  back.limit === 300000 && back.stepLimit === 100 &&
+  back.noHint === true && back.noUndo === false && back.noSnap === false,
+  `${back.limit}/${back.stepLimit}/${back.noHint}/${back.noUndo}/${back.noSnap}`);
 
 console.log('\n--- 10. 重试这一局：还是同一盘，仍记在每日里 ---');
 await page.evaluate(() => {
@@ -473,6 +476,40 @@ ok('重试仍是每日挑战（day / tier 没丢）',
   !!retry.daily && retry.daily.tier === 'mid', JSON.stringify(retry.daily));
 ok('重试还是同一盘', retry.regions === beforeReload.regions);
 ok('限时重新给满', retry.limit === 300000);
+
+console.log('\n--- 11. 步数用尽：跟限时一样判负 ---');
+/* 每日挑战的步数限制是跟着难度走的（中等 = 100 步），判负规矩跟自定义挑战一条：
+ * 数到上限还没解开就封盘。这里把计数器挪到「还差一步」，再真点一格。 */
+await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.state.steps = d.state.stepLimit - 1;
+  document.querySelector('.cell').click();
+});
+await sleep(900);
+const overSteps = await page.evaluate(() => ({
+  status: __QUEENS_DEBUG__.state.status,
+  lostBy: __QUEENS_DEBUG__.state.lostBy,
+  steps: __QUEENS_DEBUG__.state.steps,
+  open: !document.getElementById('result').hidden,
+  title: document.getElementById('resultTitle').textContent.trim(),
+  timeLbl: document.getElementById('resTimeLbl').textContent.trim(),
+  time: document.getElementById('resTime').textContent.trim()
+}));
+ok('第 100 步用完就判负',
+  overSteps.status === 'lost' && overSteps.lostBy === 'steps' && overSteps.steps === 100,
+  `${overSteps.status}/${overSteps.lostBy}/${overSteps.steps}`);
+ok('结果层是「步数用尽」', overSteps.open && overSteps.title === '步数用尽', overSteps.title);
+ok('中间那格写「限步 100」', overSteps.timeLbl === '限步' && overSteps.time === '100',
+  `${overSteps.timeLbl}=${overSteps.time}`);
+await page.screenshot({ path: `${SHOTS}/daily-7-steps-lost.png` });
+await jsClick('#btnAgain');
+await sleep(800);
+const retrySteps = await game();
+const retryStepsNow = await page.evaluate(() => __QUEENS_DEBUG__.state.steps);
+ok('重试回到每日挑战、步数归零、限步还在',
+  !!retrySteps.daily && retrySteps.daily.tier === 'mid' &&
+  retryStepsNow === 0 && retrySteps.stepLimit === 100,
+  `${JSON.stringify(retrySteps.daily)}/${retryStepsNow}/${retrySteps.stepLimit}`);
 
 console.log('\n--- console ---');
 console.log(errs.length ? errs.join('\n') : '(none)');

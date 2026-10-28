@@ -6,8 +6,9 @@
  *   自定义 —— 棋盘大小、目标难度、挑战全都自己挑（原来的玩法，一个字没改）
  *   每日挑战 —— 一天一盘，只跟日期有关（见 core/daily.js / app/daily.js）：
  *                难度五挡，完成前一挡才解锁下一挡；棋盘固定该挡最大盘；
- *                限时按挡位 3 / 5 / 10 / 15 / 20 分钟；步数不限、禁用提示、
- *                可以撤销、禁用记录点、标错扣 3 条命。这些全锁着，改不了。
+ *                限时按挡位 3 / 5 / 10 / 15 / 20 分钟，限步按挡位
+ *                60 / 100 / 150 / 250 / 400 步；禁用提示、可以撤销、
+ *                记录点可用、标错不惩罚。这些全锁着，改不了。
  *
  * 自定义那一路的三组（尺寸 / 难度 / 挑战）都只写 pending，点「换一局」才落地
  * ——中途改完不换局就等于没改（开了限时又反悔，也不用担心这局被计时追着跑）。
@@ -36,7 +37,7 @@ import {
   stepLimitLabel
 } from '../../core/config.js';
 import {
-  DAILY_LIVES, DAILY_TIERS, countDone, complete, dayKey, dayLabel, isDone, pickTier, ruleOf,
+  DAILY_TIERS, countDone, complete, dayKey, dayLabel, isDone, pickTier, ruleOf,
   unlocked
 } from '../../core/daily.js';
 import { btnNew } from '../../core/dom.js';
@@ -213,11 +214,11 @@ function applyMode() {
     var r = ruleOf(pending.difficulty);
     pending.size = r.size;
     pending.timeLimit = r.limit;
-    pending.stepLimit = 0;
-    pending.lifeLimit = DAILY_LIVES;
+    pending.stepLimit = r.steps;
+    pending.lifeLimit = 0;
     pending.noHint = true;
     pending.noUndo = false;
-    pending.noSnap = true;
+    pending.noSnap = false;
     return;
   }
 
@@ -364,10 +365,10 @@ export function challengeSummary() {
 function challengeSumText() {
   if (mode === 'daily') {
     var r = ruleOf(pending.difficulty);
-    /* 每日挑战这几项是写死的，「标错 3 条」压成「3 条命」、
-       「3 分钟」压成「3 分」—— 标题放大之后这一行窄了，320 上才不至于截得只剩半句。 */
+    /* 每日挑战这几项是写死的，「限时 3 分钟」压成「3 分」——
+       标题放大之后这一行窄了，320 上才不至于截得只剩半句。 */
     return r
-      ? '限时 ' + Math.round(r.limit / 60000) + ' 分 · ' + DAILY_LIVES + ' 条命 · 无提示'
+      ? '限时 ' + Math.round(r.limit / 60000) + ' 分 · ' + r.steps + ' 步 · 无提示'
       : '由难度决定';
   }
   var bits = [pending.timeLimit ? '限时 ' + limitLabel(pending.timeLimit) : '不限时'];
@@ -547,7 +548,7 @@ export function syncNew() {
     sbtns[s].classList.toggle('is-locked', daily);
   }
   stepHint.textContent = daily
-    ? '每日挑战不限步数'
+    ? '每日挑战固定限步 ' + stepLimitLabel(sl) + ' · 用完判负，可以重试这一局'
     : (sl !== slApplied
         ? '换一局后生效：' + stepLimitLabel(sl)
         : (sl ? '本局限步 ' + stepLimitLabel(sl) + '，用完判负，可以重试这一局'
@@ -565,7 +566,7 @@ export function syncNew() {
     lbts[q].classList.toggle('is-locked', daily);
   }
   lifeHint.textContent = daily
-    ? '每日挑战固定扣 ' + DAILY_LIVES + ' 条，放错一次扣一条'
+    ? '每日挑战不惩罚标错：放错的皇后会亮冲突线，自己擦掉就行'
     : (lv2 !== lvApplied
         ? '换一局后生效：' + (lv2 ? lifeLabel(lv2) : '不惩罚')
         : (lv2 ? '本局 ' + lifeLabel(lv2) + '，放错一次扣一条，可以重试这一局'
@@ -613,7 +614,8 @@ export function syncShuffleRow() {
     btnShuffle.classList.toggle('is-pending', !done);
     shuffleHint.classList.toggle('is-pending', false);
     shuffleHint.textContent = '今日 ' + band.name + ' ' + r.size + '×' + r.size +
-      ' · 限时 ' + limitLabel(r.limit) + (done ? ' · 今天打过了，只刷新时间' : '');
+      ' · 限时 ' + Math.round(r.limit / 60000) + ' 分 · ' + r.steps + ' 步' +
+      (done ? ' · 今天打过了，只刷新时间' : '');
     return;
   }
 

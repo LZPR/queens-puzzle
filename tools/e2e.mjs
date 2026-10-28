@@ -597,7 +597,7 @@ const newUi = await page.evaluate(() => {
 check('换一局面板从顶栏打开', newUi.open, `inView=${newUi.inView}`);
 check('换一局面板完整可见', newUi.inView);
 check('换一局面板有快捷尺寸', newUi.quick >= 5, `quick=${newUi.quick}`);
-check('换一局面板带着挑战挡位', newUi.limit === 6 && newUi.step === 5, `${newUi.limit}/${newUi.step}`);
+check('换一局面板带着挑战挡位', newUi.limit === 6 && newUi.step === 6, `${newUi.limit}/${newUi.step}`);
 check('换一局面板底部是「换一局」且没有分享', newUi.shuffle && !newUi.share);
 await page.screenshot({ path: `${OUT}/06b-newgame.png` });
 

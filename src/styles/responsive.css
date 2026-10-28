@@ -47,6 +47,11 @@
   .heart { width: 12px; height: 12px; }
   .life-hearts { gap: 2px; }
   .life-track { width: 80px; height: 10px; }
+  /* 挑战挡位那一排塞到六颗了（步数多了「400 步」一挡）：每颗只剩 39px，
+     「400 步」按原来的字号+左右内边距会顶到描边上。缝收到 4、左右内边距让给字、
+     字号再降半档 —— 这三处让出来的 5px 正好够。 */
+  .limit-opts { gap: 4px; }
+  .lbtn { padding-left: 0; padding-right: 0; font-size: 11px; }
 }
 
 /* 宽一点就把四张读数卡片摊成一行 */

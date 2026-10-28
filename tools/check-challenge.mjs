@@ -141,8 +141,8 @@ let ui = await sheetUi();
 ok('挑战组在「换一局」之上', ui.aboveShuffle);
 ok('限时挡位 6 个且首个是「不限」', ui.labels.length === 6 && ui.labels[0] === '不限', ui.labels);
 ok('默认选中「不限」', ui.on.length === 1 && ui.on[0] === '不限', ui.on);
-ok('步数限制挡位 5 个且首个是「不限」',
-  ui.stepLabels.length === 5 && ui.stepLabels[0] === '不限', ui.stepLabels);
+ok('步数限制挡位 6 个且首个是「不限」',
+  ui.stepLabels.length === 6 && ui.stepLabels[0] === '不限', ui.stepLabels);
 ok('步数限制默认也是「不限」', ui.stepOn.length === 1 && ui.stepOn[0] === '不限', ui.stepOn);
 // 挑战是「开一局新的」的一部分，跟棋盘大小 / 目标难度一起住在换一局面板里；
 // 设置面板那一列只剩 8 个偏好开关，那 8 个不在这里数。

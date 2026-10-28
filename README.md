@@ -577,17 +577,19 @@ looks/
 **每日挑战**。每日挑战一天一盘，**只跟日期有关**：同一台设备、换一台设备、打几次、
 刷新多少回，今天这一档都是同一盘；到了第二天日期一变，种子换一批，进度也从「容易」重来。
 
-| 难度 | 棋盘（这一档最大盘） | 限时 |
-| --- | --- | --- |
-| 容易 | 5×5 | 3 分钟 |
-| 中等 | 8×8 | 5 分钟 |
-| 较难 | 14×14 | 10 分钟 |
-| 困难 | 16×16 | 15 分钟 |
-| 极难 | 16×16 | 20 分钟 |
+| 难度 | 棋盘（这一档最大盘） | 限时 | 限步 |
+| --- | --- | --- | --- |
+| 容易 | 5×5 | 3 分钟 | 60 步 |
+| 中等 | 8×8 | 5 分钟 | 100 步 |
+| 较难 | 14×14 | 10 分钟 | 150 步 |
+| 困难 | 16×16 | 15 分钟 | 250 步 |
+| 极难 | 16×16 | 20 分钟 | 400 步 |
 
-- 尺寸不另写一份表，就是 `DIFF_BANDS[tier].hi`（见 `core/daily.js` 的 `ruleOf()`）。
-- 除了棋盘与限时，其余各项**写死**：步数不限、禁用提示、可以撤销、禁用记录点、
-  标错扣 3 条命。面板上这些控件是 `disabled` 的，每一条下面还写一句为什么，
+- 尺寸不另写一份表，就是 `DIFF_BANDS[tier].hi`（见 `core/daily.js` 的 `ruleOf()`）；
+  限时 `TIER_MS`、限步 `TIER_STEPS` 也是同一份 `ruleOf()` 吐出来的，
+  步数那五挡取自 `STEP_OPTIONS`（自定义挑战里能选的就是这几个数）。
+- 除了棋盘、限时与限步，其余各项**写死**：禁用提示、可以撤销、记录点可用、
+  标错不惩罚。面板上这些控件是 `disabled` 的，每一条下面还写一句为什么，
   不是「点了没反应」。
 - **解锁链**：容易永远开着，完成前一挡才解锁下一挡。
   **打完任意一挡就算完成今日挑战**——五挡是同一天里可选的五个尺寸（5×5 想随手来一局、
@@ -769,7 +771,7 @@ ui/panels/index.js 是这些面板唯一的清单
 | `core/audio.js` | WebAudio 实时合成音效 + 震动 |
 | `core/storage.js` | 设置与当前这局的存档（写盘 160ms 防抖），含限时 / 起算点 / 步数 / 步数限制 / 命数与命数上限（缺 `lives` 字段的老存档按满格算——编个 0 出来等于一读盘就判负）、三把「禁用 X」的锁与 `daily`（每日挑战的日期 + 档位） |
 | `core/records.js` | 每局战绩：数据结构、localStorage 读写、按「限时 × 难度」分组排名（不碰 DOM）；带刻度版本 `sq`，旧刻度的成绩不进榜；步数与步数限制记 `st` / `sl`，输的原因记 `lr` |
-| `core/daily.js` | 每日挑战的数据层：本地日期键 `dayKey()`、四挡的规矩 `ruleOf()` / `rulesFor()`、完成记录（`localStorage` 的 `queens.daily.v1`，按天按档位只留最快一次）、解锁链与「打任意一挡就算完成今日」`complete()`。不碰 DOM、不碰引擎 |
+| `core/daily.js` | 每日挑战的数据层：本地日期键 `dayKey()`、五挡的规矩 `ruleOf()` / `rulesFor()`（尺寸 / 限时 `TIER_MS` / 限步 `TIER_STEPS` / 那几把锁）、完成记录（`localStorage` 的 `queens.daily.v1`，按天按档位只留最快一次）、解锁链与「打任意一挡就算完成今日」`complete()`。不碰 DOM、不碰引擎 |
 | `core/clock.js` | 计时（只在有动作后起表）+ 限时剩余时间 `limitRemaining()` / 信息条上的计时段 `paintClock()` |
 | `game/rules.js` | 自动打叉、被逼定位、冲突对、色块计数、填错的色块、`pendingQueens()`（只剩皇后没标）、`isSolutionCell()`（标错惩罚的判据：这一格是不是解位） |
 | `game/geometry.js` | 格子边长、色块轮廓 path |
@@ -888,7 +890,7 @@ markup、元素引用、事件、开关全在 `src/js/ui/panels/xxx.js` 里。�
 | 改信息页的卡片 / 文案 / 分享区 | `ui/panels/info.js` 的 `HTML`（`.info-grid` / `.share`）+ `paintInfo()` / `renderDiff()`，样式在 `styles/panels/info.css` |
 | 改「补齐」什么时候露 / 补哪几格 | `game/rules.js` 的 `pendingQueens()`（三条判据都在这儿）；露不露的文案在 `ui/hint.js` 的 `setNudge()`，落子节奏在 `app/actions.js` 的 `fillQueens()` |
 | 改步数怎么算 / 怎么读 | 计数只有一处：`app/history.js` 的 `pushHistory()`（一次落笔一步，只增不减）；读数在 `ui/render.js`（信息条）与 `ui/panels/info.js`（信息页）。**撤销栈的 `UNDO_MAX` 跟它不是一回事**，别拿它当显示上限 |
-| 改每日挑战的规矩（尺寸 / 限时 / 命数 / 解锁链） | `core/daily.js` 的 `ruleOf()` / `TIER_MS` / `DAILY_LIVES` / `unlocked()`；面板上怎么锁在 `ui/panels/newgame.js` 的 `syncNew()`（`mode === 'daily'` 那几个分支） |
+| 改每日挑战的规矩（尺寸 / 限时 / 限步 / 命数 / 解锁链） | `core/daily.js` 的 `ruleOf()` / `TIER_MS` / `TIER_STEPS` / `rulesFor()` / `unlocked()`；面板上怎么锁在 `ui/panels/newgame.js` 的 `syncNew()`（`mode === 'daily'` 那几个分支） |
 | 改每日挑战出题（种子 / 试几张） | `app/daily.js`（纯函数 `seedOf()` 可以直接对表；改完跑 `tools/check-daily.mjs`） |
 | 改每日日历长什么样 | `ui/panels/records.js` 的 `renderDaily()` + `styles/panels/records.css` 末尾那一节 |
 | 改战绩记什么 | `core/records.js` 的 `add()` / `tidy()`（加字段记得兼容老数据） |
@@ -912,7 +914,7 @@ node tools/test-engine.mjs   # 出题引擎（唯一解、连通性）
 node tools/test-hint.mjs     # 提示引擎
 node tools/check-probe-guide.mjs # 试推（L4）那套话：5–8 步 / 假设与结论之间必须讲清 / 玩家的 × 也算约束（不许圈到画过叉的格）/ 盘上有错的 × 先纠错 / 面板高度
 node tools/check-challenge.mjs   # 挑战：限时 / 步数限制 / 禁用提示 / 禁用撤销 / 挑战组折叠与标题条（102 项）
-node tools/check-daily.mjs       # 每日挑战：两条路 / 全部锁死 / 只跟日期有关 / 解锁链 / 不动玩家的设置 / 战绩里的日历 / 刷新与重试（84 项）
+node tools/check-daily.mjs       # 每日挑战：两条路 / 全部锁死 / 只跟日期有关 / 解锁链 / 不动玩家的设置 / 战绩里的日历 / 刷新与重试 / 步数用尽（88 项）
 node tools/check-lives.mjs       # 标错惩罚：命数挡位 / 放错不落子只扣命 / 扣光判负 / 存档续命 / 红心与血条 / 320 窄屏（83 项）
 node tools/check-records.mjs     # 战绩：记录写入 / 缩略图 / 分享码 / 排行榜分组 / 删除清空
 node tools/check-look.mjs        # 外观：五套色块 / 七排展柜 / 白送那套在最前 / 图案落地 / 纱 / 叉与皇后 / 存盘兜底 / 矮屏（99 项）

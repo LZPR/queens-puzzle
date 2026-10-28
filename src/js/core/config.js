@@ -95,13 +95,16 @@ export function limitLabel(ms) {
 /* 挑战：步数限制的挡位（0 = 不限）。
  * 一步 = 一次落笔（见 app/history.js 的 pushHistory）：点一格是一步，
  * 拖动连涂一整行也只算一步——跟撤销点同一个口径，玩家心里那笔账才对得上。
- * 挡位按「一局大概要落多少次笔」排：8×8 顺手时二三十步，16×16 慢慢推能到上百步。 */
+ * 挡位按「一局大概要落多少次笔」排：8×8 顺手时二三十步，16×16 慢慢推能到上百步。
+ * 非零的五挡正好配每日挑战的五挡难度（见 core/daily.js 的 TIER_STEPS，那边只引用
+ * 数值、不在这里挑）：挡位之间不留空档，加挡位时两边一起看。 */
 export var STEP_OPTIONS = [
   { steps: 0, label: '不限' },
   { steps: 60, label: '60 步' },
   { steps: 100, label: '100 步' },
   { steps: 150, label: '150 步' },
-  { steps: 250, label: '250 步' }
+  { steps: 250, label: '250 步' },
+  { steps: 400, label: '400 步' }
 ];
 
 export var STEP_MAX = 9999;
