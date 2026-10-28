@@ -12,6 +12,8 @@
  *   · 抽奖面板：机器摆好一盘（三转轮各三格）、拉杆能抽、空格也能抽；
  *   · 奖品是外观（core/unlock.js 账本）：三个一样解锁那套；两个一样在面板里
  *     加送一杆；抽中已解锁的也加送一杆；都解锁了转不出任何奖励；
+ *   · 开面板只给一杆（pulls = 1），杆子用完拉杆熄掉（is-spent）、再拉不转；
+ *     只有「两个一样 / 抽中已解锁」落定时才加送一杆；
  *   · ?luck=unlock|repeat|pair|none 钉死第一抽的档位（只钉一抽）；
  *   · ?slot=easy|mid|hard|extreme 开机直接开面板（测试模式，不占资格可反复抽）。
  * ========================================================================== */
@@ -123,6 +125,7 @@ let p = await probe();
 ok('结算层收掉了、抽奖层开着', (await sheet()) === 'slot', await sheet());
 ok('三条转轮都摆好了（各 3 格）', p.reels.length === 3 && p.reels.every(n => n === 3), p.reels);
 ok('奖品条是待机档', p.tone === 'idle', p.tone);
+ok('开面板只有一杆', p.pulls === 1, p.pulls);
 ok('拉杆拿得到焦点', await page.evaluate(() =>
   document.getElementById('slotLeverKnob').tabIndex === 0));
 await page.screenshot({ path: `${SHOTS}/slot-1-open.png` });
@@ -133,9 +136,22 @@ await page.waitForFunction(() => {
 }, { timeout: 15000 });
 p = await probe();
 ok('钉死 none → 谢谢参与', p.tone === 'lose', p.tone);
+ok('这一杆用完（pulls 归零）', p.pulls === 0, p.pulls);
+ok('拉杆熄了（is-spent）', await page.evaluate(() =>
+  document.getElementById('slotLever').classList.contains('is-spent')));
 ok('外观账本没动（只有每类第一套开着）', Object.keys((await unlocked()).surface).length === 1 &&
   Object.keys((await unlocked()).mark).length === 1, await unlocked());
 await page.screenshot({ path: `${SHOTS}/slot-2-none.png` });
+
+console.log('\n--- 1b. 一杆抽完：再拉不转、不出新结果 ---');
+await page.keyboard.press('Space');
+await sleep(800);
+p = await probe();
+ok('用完了再按空格：机器没动、档位还是谢谢参与',
+  p.busy === false && p.tone === 'lose' && p.pulls === 0, p);
+ok('奖品条改口「抽完了」', /抽完了/.test(await page.evaluate(() =>
+  document.getElementById('slotPrizeNote').textContent)));
+await page.screenshot({ path: `${SHOTS}/slot-2b-spent.png` });
 
 console.log('\n--- 2. 收下：回结算界面，按钮消失（资格用掉不补） ---');
 await jsClick('#btnSlotDone');
@@ -161,6 +177,7 @@ await page.waitForFunction(() => {
 }, { timeout: 15000 });
 p = await probe();
 ok('钉死 pair → 浅黄的「再抽一次」档', p.tone === 'half', p.tone);
+ok('两个一样加送一杆（还剩 1 杆）', p.pulls === 1, p.pulls);
 await page.screenshot({ path: `${SHOTS}/slot-4-again.png` });
 // 不关面板接着抽：加送的那杆走真随机，链条总能落定
 p = await pullUntilDone();
@@ -271,6 +288,7 @@ await sleep(500);
 p = await probe();
 ok('开机直接进抽奖面板', (await sheet()) === 'slot', await sheet());
 ok('奖品条待机', p.tone === 'idle', p.tone);
+ok('测试模式杆子无限（pulls = -1）', p.pulls === -1, p.pulls);
 const noteTxt = await page.evaluate(() => document.getElementById('slotNote').textContent);
 ok('副标题是测试模式口径', noteTxt.includes('测试模式') && noteTxt.includes('困难'), noteTxt);
 await page.keyboard.press('Space');

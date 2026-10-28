@@ -8,19 +8,20 @@
  *     拉杆（可拖 / 空格也行）、
  *     三条转轮按速度动态模糊、奖品条按结果分档点亮；
  *   · 不用抽奖券、不记账（没有「抽没抽过」的存档）：机器弹出资格就算用掉
- *     （view.drawUsed），默认只抽一杆；两个一样 / 抽中已解锁的面板里加送一杆，
- *     关掉或者错过都算放弃；
+ *     （view.drawUsed），**开面板只给一杆**（pullsLeft = 1）；两个一样 / 抽中
+ *     已解锁的那一杆落定时才加送一杆（out.extra），杆子用完拉杆就熄掉，
+ *     再拉只有一声闷响、不再转；关掉或者错过都算放弃；
  *   · 转动中 Esc 关不掉（canClose 拦住），抽完「收下」回结算界面；
  *   · 奖品就是外观（core/unlock.js 的账本）：三个一样 = 解锁那套外观；
  *     两个一样 = 送一次再抽；抽中的那套已经解锁了 = 也送一次再抽；
  *   · 奖池里锁着的套占大多数、已解锁的只是占位的小份——转出来的
  *     「三个一样」绝大多数都是还没到手的；
  *   · 外观全都解锁了之后机器还在，但转不出任何奖励；
- *   · 概率由 drawOutcome() 统一控（三样解锁 15% / 两样再抽 44% /
- *     谢谢参与 41%），?luck=unlock|repeat|pair|none 可以钉死档位（只钉一抽），
+ *   · 概率由 drawOutcome() 统一控（三样解锁 20% / 两样再抽 33% /
+ *     谢谢参与 47%），?luck=unlock|repeat|pair|none 可以钉死档位（只钉一抽），
  *     给自动化测试用；
  *   · ?slot=easy|mid|hard|extreme 开机直接把面板拉起来（测试模式，
- *     不占资格、可反复抽）。
+ *     不占资格、杆子无限，可反复抽）。
  * ========================================================================== */
 
 import { buzz, sfx } from '../../core/audio.js';
@@ -111,8 +112,12 @@ var prizeBar = null, prizeIco = null, prizeName = null, prizeNote = null;
 
 var sheet = null;
 
-/* 这一轮的机器状态：busy = 转着（Esc 拦住），drawn = 这一开已经抽过了 */
+/* 这一轮的机器状态：busy = 转着（Esc 拦住），pulls = 还剩几杆（开面板 1 杆） */
 var busy = false;
+
+/* 还剩几杆。开面板给 1 杆；某一杆落定是「两个一样 / 抽中已解锁」时加送 1 杆。
+ * 用完为止——以前这个数没人管，杆子可以无限拉。测试模式给 Infinity。 */
+var pullsLeft = 1;
 
 /* 测试模式（?slot= 开进来的那一开）：抽了不记账，关面板也不回结算层 */
 var testMode = false;
@@ -124,6 +129,21 @@ var $$ = function (s, r) { return Array.prototype.slice.call((r || document).que
 function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+/* 杆子还剩没用完吗。用完就熄（is-spent）——拖不动、按空格也不转 */
+function spent() { return pullsLeft <= 0; }
+
+function applyPulls() {
+  if (!leverEl) return;
+  var off = spent();
+  leverEl.classList.toggle('is-spent', off);
+  /* 机身底栏那条「PULL ∨」也跟着熄：不然柜子还在招手，杆子却拉不动 */
+  if (el) el.classList.toggle('is-spent', off);
+  if (knobEl) {
+    knobEl.setAttribute('aria-disabled', off ? 'true' : 'false');
+    knobEl.setAttribute('aria-label', off ? '这一杆已经抽完' : '向下拉动拉杆抽奖');
+  }
+}
 
 /* ==========================================================
    1. 奖池：转轮上转的就是外观（looks/index.js 登记的全部套目）
@@ -261,8 +281,8 @@ function symIcon(e) {
   return o.svg.replace('<svg ', '<svg style="fill:currentColor;stroke:none" ');
 }
 
-/* 档位：三个一样 15%（锁着的 → 解锁；占位 → 也送一次再抽）
-   + 两个一样 44%（送一次再抽）+ 谢谢参与 41%（到此为止）。
+/* 档位：三个一样 20%（五杆里大约一杆；锁着的 → 解锁；占位 → 也送一次再抽）
+   + 两个一样 33%（三杆里大约一杆，送一次再抽）+ 谢谢参与 47%（到此为止）。
    ?luck=unlock|repeat|pair|none 可以钉死档位，专门用来看某一种结局；
    钉的那一下只管一抽，下一抽回到真随机（不然测试里两个一样的链条走不完）。 */
 var FORCE = new URLSearchParams(location.search).get('luck');
@@ -292,7 +312,7 @@ function drawOutcome() {
   var tier = forceOnce();
   if (!tier) {
     var r = Math.random();
-    tier = r < 0.15 ? 'unlock' : r < 0.59 ? 'pair' : 'none';
+    tier = r < 0.20 ? 'unlock' : r < 0.53 ? 'pair' : 'none';
   }
 
   /* 三个一样：锁着的 → 解锁它；抽中的是占位（已解锁）→ 也送一次再抽 */
@@ -349,6 +369,8 @@ function travelPx() {
 function onDown(e) {
   if (busy || !sheet.isOpen()) return;
   if (e.button !== undefined && e.button !== 0) return;
+  /* 杆子用完了就是块死铁：拖不动，也不给拖动反馈 */
+  if (spent()) { sfx('slotNope'); return; }
   e.preventDefault();
 
   lever.dragging = true;
@@ -640,13 +662,23 @@ function confetti(n) {
 async function trigger() {
   if (busy || !sheet.isOpen()) return;
 
+  /* 杆子用完了：不转、不出结果，只给一声闷响（不然面板看着还能无限拉） */
+  if (spent()) {
+    sfx('slotNope');
+    prizeNote.textContent = '这一杆的奖已经抽完了 · 按「收下」结束';
+    return;
+  }
+
   busy = true;
+  pullsLeft -= 1;     // 先记账：这一杆已经在飞了，半路关掉也不退
   document.getElementById('slot').classList.add('is-spinning');
   setPrize('spinning', '<span class="slot-dots"><i></i><i></i><i></i></span>', '转动中…', '别急，让它停稳');
   slam();
   buzz(12);
 
   var out = drawOutcome();
+  /* 两个一样 / 抽中已解锁的那套：这一杆落定时加送一杆 */
+  if (out.extra) pullsLeft += 1;
 
   await wait(110);
   kickMachine();
@@ -660,6 +692,8 @@ async function trigger() {
   await Promise.all(reels.map(function (_, i) { return spinReel(i, out.reels[i], durs[i]); }));
 
   resolve(out);
+  /* 文案先说结果，再把杆子熄掉：这一杆用完了就不该看着还能拉 */
+  applyPulls();
 
   busy = false;
   document.getElementById('slot').classList.remove('is-spinning');
@@ -720,6 +754,9 @@ function paint() {
   }
   busy = false;
   lever.dragging = false;
+  /* 开面板只给一杆；测试模式（?slot=）杆子无限，方便反复调手感 */
+  pullsLeft = testMode ? Infinity : 1;
+  applyPulls();
   setPrize('idle', icon('crown'), '拉动右侧的杆子', '三个一样解锁外观 · 两个一样再抽一次');
 }
 
@@ -749,11 +786,13 @@ export function maybeOpenFromUrl() {
 
 export function isSlotOpen() { return !!sheet && sheet.isOpen(); }
 
-/* 自动化测试探针：机器忙不忙、奖品条现在什么档（见 tools/check-slot.mjs） */
+/* 自动化测试探针：机器忙不忙、还剩几杆、奖品条现在什么档（见 tools/check-slot.mjs） */
 export function slotProbe() {
   return {
     open: !!sheet && sheet.isOpen(),
     busy: busy,
+    /* 还剩几杆；测试模式是无限杆，报 -1 */
+    pulls: pullsLeft === Infinity ? -1 : pullsLeft,
     tone: prizeBar ? prizeBar.dataset.tone : null,
     prize: prizeName ? prizeName.textContent : '',
     reels: reels.length ? reels.map(function (r) { return r.strip.children.length; }) : []

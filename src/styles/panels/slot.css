@@ -412,6 +412,19 @@
   outline-offset: 3px;
 }
 
+.slot.is-spent .slot-cab-foot { opacity: .38; }
+
+/* 这一杆抽完了（pullsLeft 归零）：杆子褪成死铁，别再假装还能拉。
+   只在「结果落定之后」才挂上这个类——转动中扣杆不熄灯。 */
+.slot-lever.is-spent .slot-lever-knob {
+  cursor: not-allowed;
+  opacity: .45;
+  filter: grayscale(.9);
+  box-shadow: 0 2px 0 var(--ink), inset 0 2px 5px rgba(255,255,255,.4);
+}
+
+.slot-lever.is-spent .slot-track-on { opacity: 0; }
+
 /* ============================================================
    3. 奖品条
    ============================================================ */
