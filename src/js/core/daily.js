@@ -13,13 +13,16 @@
  *   棋盘 = 这一挡能开的最大盘（借 DIFF_BANDS 的 hi，别另写一份尺寸）
  *   **限时 / 限步 / 标错惩罚三样里，每天每挡只抽两样**，剩下那样这一局不算：
  *     限时 = 3 / 5 / 10 / 15 / 20 分钟（被抽到时）
- *     限步 = 60 / 100 / 150 / 250 / 400 步（被抽到时）
+ *     限步 = 40 / 100 / 300 / 400 / 400 步（被抽到时，按「一步 = 变一格」算：
+ *            大约是该挡棋盘格数的 1.3–1.6 倍）
  *     标错 = 固定 3 条命（被抽到时）；没抽到就是「放错不扣命」
  *   抽哪两样只认「日期 + 档位」，跟棋盘一个道理：同一挡今天刷新多少回都一样，
  *   换一天（或换一挡）才可能换组合 —— 见 skipOf()。
- *   恒定项：禁用提示 · 可以撤销 · 记录点可用
- *   三个辅助随难度逐级关掉：较难关自动补全、困难再关自动标 ×、极难连唯一位置提示
- *   也关（见 TIER_ASSISTS）。它们跟限时那三样不一样，**不抽签**，只按挡位定。
+ *   恒定项：禁用提示 · 可以撤销 · 记录点可用 · **唯一位置提示锁定为关**
+ *   两个辅助（自动标 × / 自动补全）**不再随难度变化**（2026-10-29）：默认都开，
+ *   玩家在换一局面板里自己关（见 DAILY_ASSISTS / rulesFor）。
+ *   唯一位置提示跟它们不一样：它是**答案泄漏**，每日挑战里锁死为关、拨不动
+ *   （开关灰着），所以不在这两颗「可拨辅助」之列。
  *   完成任意一挡就算完成今日挑战（五挡是同一天里可选的五个尺寸，不是五道关卡）；
  *   解锁链照旧，完成前一挡才开下一挡。
  *
@@ -37,26 +40,20 @@ export var DAILY_LIVES = 3;
 /** 三项挑战规矩。每天每挡抽两项，剩下一项这一局不设限。 */
 export var DAILY_RULES = ['time', 'steps', 'lives'];
 
-/* 每挡给多少步：跟限时同一套节奏（3/5/10/15/20 分钟 → 60/100/150/250/400 步），
- * 数值取自 config.js 的 STEP_OPTIONS（挑挡位时那排按钮就是这几个数）——
- * 改这里先看那边有没有同一挡，别两边各说一套。 */
-var TIER_STEPS = { easy: 60, mid: 100, advanced: 150, hard: 250, extreme: 400 };
+/* 每挡给多少步。按「一步 = 变一格」（见 ui/render.js）：
+ * 干净解开一盘的步数正好等于格数，所以这几个数是「最大盘格数 + 余量」——
+ *   容易 5×5=25 → 40、中等 8×8=64 → 100、较难 14×14=196 → 300
+ *   困难 / 极难都是 16×16=256 → 400（同尺寸同预算，差在限时与盘面难度）
+ * 数值都取自 config.js 的 STEP_OPTIONS，改那边先看这边有没有同一挡。 */
+var TIER_STEPS = { easy: 40, mid: 100, advanced: 300, hard: 400, extreme: 400 };
 
 /* 每挡多久：容易到极难 3 → 20 分钟，一挡比一挡宽。 */
 var TIER_MS = { easy: 180000, mid: 300000, advanced: 600000, hard: 900000, extreme: 1200000 };
 
-/* 每挡留哪几样「辅助」。默认三样全开，随难度逐级关掉：
- *   较难（advanced）起关「自动补全」——一盘 9–14 的盘不该一键收尾；
- *   困难（hard）起再关「自动标 ×」——叉要自己划，推理才是这一挡的正题；
- *   极难（extreme）连「唯一位置提示」也关——那是最直接的答案泄漏。
- * 「禁用提示」是恒定的（rulesFor 里写死），不在这张表里。 */
-var TIER_ASSISTS = {
-  easy: { autoFill: true, autoMark: true, forced: true },
-  mid: { autoFill: true, autoMark: true, forced: true },
-  advanced: { autoFill: false, autoMark: true, forced: true },
-  hard: { autoFill: false, autoMark: false, forced: true },
-  extreme: { autoFill: false, autoMark: false, forced: false }
-};
+/* 两个辅助的默认值：**不再随难度变化**（2026-10-29 撤掉了 TIER_ASSISTS）。
+ * 每日挑战里「自动标 ×」「自动补全」由玩家在换一局面板里自己挑，默认都开。
+ * 「唯一位置提示」不在这里：它在每日挑战里**锁定为关**（见 ruleOf / rulesFor）。 */
+export var DAILY_ASSISTS = { autoMark: true, autoFill: true };
 
 /** 留多少天的记录：一年多一点。再老的按日期丢掉，不至于把 localStorage 撑爆。 */
 var KEEP_DAYS = 400;
@@ -107,29 +104,35 @@ export function skipOf(day, tier) {
 }
 
 /** 某一挡的规矩：棋盘固定这一档能开的最大盘；限时 / 限步 / 标错里抽两样，
- *  没抽到的那一项给 0（不限 / 不惩罚）。三个辅助按挡位递进关掉（见 TIER_ASSISTS）。 */
+ *  没抽到的那一项给 0（不限 / 不惩罚）。
+ *  三个辅助字段仍然吐出来，但**只是默认值**（不再随挡位变化）：
+ *  真跑一局时玩家在面板里挑的那两颗走 rulesFor() 的第 3 个参数。
+ *  forced 在这里恒为 false：唯一位置提示是答案泄漏，每日挑战里**锁定为关**。 */
 export function ruleOf(tier, day) {
   var b = DIFF_BANDS[tier];
   if (!b) return null;
   var d = day || dayKey();
   var skip = skipOf(d, tier);
-  var assist = TIER_ASSISTS[tier] || { autoFill: true, autoMark: true, forced: true };
   return {
     tier: tier, day: d, size: b.hi, skip: skip,
     limit: skip === 'time' ? 0 : (TIER_MS[tier] || 0),
     steps: skip === 'steps' ? 0 : (TIER_STEPS[tier] || 0),
     lives: skip === 'lives' ? 0 : DAILY_LIVES,
-    autoFill: assist.autoFill,
-    autoMark: assist.autoMark,
-    forced: assist.forced
+    autoMark: DAILY_ASSISTS.autoMark,
+    autoFill: DAILY_ASSISTS.autoFill,
+    forced: false
   };
 }
 
 /** 交给 app/puzzle.js 的 applyBoard 的那一包「本局规矩」。
- *  day 一起带上：战绩与日历都认这个键（见 core/records.js 的 dy / dt）。 */
-export function rulesFor(day, tier) {
+ *  day 一起带上：战绩与日历都认这个键（见 core/records.js 的 dy / dt）。
+ *  assist 是玩家在面板里选的那两颗「辅助」（{autoMark, autoFill}）：
+ *  不传就按默认全开——读盘、重试这些路径只关心限时 / 限步 / 命数那几项。
+ *  唯一位置提示不在 assist 里：它没有「选」的余地，永远 false。 */
+export function rulesFor(day, tier, assist) {
   var r = ruleOf(tier, day);
   if (!r) return null;
+  var a = assist || null;
   return {
     timeLimit: r.limit,
     stepLimit: r.steps,
@@ -137,9 +140,10 @@ export function rulesFor(day, tier) {
     noHint: true,
     noUndo: false,
     noSnap: false,
-    autoMark: r.autoMark,
-    forced: r.forced,
-    autoFill: r.autoFill,
+    autoMark: a && a.autoMark === false ? false : DAILY_ASSISTS.autoMark,
+    autoFill: a && a.autoFill === false ? false : DAILY_ASSISTS.autoFill,
+    /* 唯一位置提示：每日挑战里锁定为关（开关灰着，rules 里也不给开口子） */
+    forced: false,
     daily: { day: day, tier: tier }
   };
 }

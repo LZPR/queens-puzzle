@@ -1,9 +1,11 @@
 /* ============================================================================
  * 步数与「一键补齐」
- *   · 信息条上的步数段：一次落笔涨一步、没有 60+ 封顶、撤销重做不退、
+ *   · 信息条上的步数段：**棋盘变一格就是一步**（2026-10-29 起按格记账：
+ *     拖动连涂几格几步、自动打出来的 × 也算）、没有 60+ 封顶、撤销重做不退、
  *     刷新页面还能接着这个数、信息页与信息条一致
  *   · 提示行上的「补齐」：只在「除了皇后位别处都划掉了」时露出，
- *     点下去挨个落子、只压一个撤销点、最后照常判胜
+ *     点下去挨个落子（每只一步）、只压一个撤销点、最后照常判胜；
+ *     剩下的步数不够补完那几只时，干脆不给补
  *
  *   python serve.py --no-open
  *   node tools/check-finish.mjs
@@ -136,7 +138,9 @@ const s2 = await stepState();
 check('点一格算一步', s1.text === '1' && s2.text === '2', `${s1.text} → ${s2.text}`);
 check('有步数后不再淡', s2.zero === false);
 
-// 双击 = 标 × + 放皇后，只算一步（第二下是同一个动作的收尾，不另立撤销点）
+/* 双击 = 标 × + 放皇后：中间那个 × 只是落皇后的中间态，**整个手势只算一步**
+ * （2026-10-29 末改：以前「这一格变了两回」算两步，玩家觉得放一只皇后花两步太亏）；
+ * 皇后带出来的那片自动 × 仍然每格一步（按格记账）。 */
 const cellBox = async (i) => {
   const el = await page.$(`.cell[data-i="${i}"]`);
   const b = await el.boundingBox();
@@ -147,10 +151,34 @@ await page.mouse.click(p.x, p.y);
 await sleep(90);
 await page.mouse.click(p.x, p.y);
 await sleep(230);
-const s3 = await stepState();
-check('双击放皇后只算一步', s3.text === '3', s3.text);
+const s3 = await page.evaluate(() => ({
+  steps: __QUEENS_DEBUG__.state.steps,
+  text: document.getElementById('stepCount').textContent,
+  auto: document.querySelectorAll('.cell.is-auto').length,
+  queens: [...__QUEENS_DEBUG__.state.marks].filter(m => m === 2).length
+}));
+check('双击放皇后：整只算一步 + 自动 × 每格一步',
+  s3.queens === 1 && s3.auto > 0 && s3.steps === Number(s2.text) + 1 + s3.auto,
+  `${s2.text} → ${s3.steps}（自动 × ${s3.auto}）`);
 
-// 拖一整行：整笔只留一个撤销点（不然一排十几格要按十几次撤销）
+/* 干净盘上再验一次绝对值：0 → 放一只皇后，读数就该是「1 + 它带出来的自动 ×」，
+ * 不是 2 + 自动 ×（双击中途那个 × 不算一步）。 */
+await newBoard(8);
+const p2 = await cellBox(11);
+await page.mouse.click(p2.x, p2.y);
+await sleep(90);
+await page.mouse.click(p2.x, p2.y);
+await sleep(240);
+const s3b = await page.evaluate(() => ({
+  steps: __QUEENS_DEBUG__.state.steps,
+  auto: document.querySelectorAll('.cell.is-auto').length,
+  queens: [...__QUEENS_DEBUG__.state.marks].filter(m => m === 2).length
+}));
+check('干净盘双击落一只皇后：正好 1 + 自动 × 步',
+  s3b.queens === 1 && s3b.auto > 0 && s3b.steps === 1 + s3b.auto,
+  `steps=${s3b.steps} auto=${s3b.auto}`);
+
+// 拖一整行：涂了几格就是几步（以前整整一笔只算一步），撤销点仍然只有一个
 /* 无头浏览器偶尔会把 pointerdown / pointermove 合并掉，整笔没起笔（unhandled 的观察：1/7 次）。
  * 所以这里不赌一次成功：真的没起笔就再来一次，断言看的是「涂了几格 ↔ 涨了几步」，不是绝对数字。 */
 const xCount = () => page.evaluate(() =>
@@ -171,30 +199,39 @@ async function dragRow() {
   return xCount();
 }
 
+/* 换一盘干净的再拖：棋盘上已经有皇后时，它所在的那一整块颜色都是自动 ×，
+ * 起笔落在自动 × 上根本不会起笔（stroke.mode = 'none'）。干净盘整行都是空格。 */
+await newBoard(8);
 const beforeDrag = await stepState();
 const xBefore = await xCount();
 let painted = (await dragRow()) - xBefore;
 if (painted <= 0) painted = (await dragRow()) - xBefore;
 const s4 = await stepState();
-check('拖一整行只算一步',
-  Number(s4.text) === Number(beforeDrag.text) + 1 && painted >= 3,
+check('拖动涂几格涨几步',
+  Number(s4.text) === Number(beforeDrag.text) + painted && painted >= 3,
   `${beforeDrag.text} → ${s4.text}，涂了 ${painted} 格`);
-
 await page.click('#btnUndo');
 await sleep(220);
 const s5 = await stepState();
 check('撤销不退步数（步数记的是走过的路）', s5.text === s4.text, `${s4.text} → ${s5.text}`);
-check('撤销确实把棋盘退回去了', (await xCount()) < xBefore + painted, String(await xCount()));
+check('一整笔只压一个撤销点：一次撤销把整行都退回去',
+  (await xCount()) === xBefore, `x=${await xCount()} 起笔前=${xBefore}`);
 await page.keyboard.down('Shift');
 await page.keyboard.press('z');
 await page.keyboard.up('Shift');
 await sleep(220);
 const s6 = await stepState();
 check('重做也不改进步数', s6.text === s5.text, `${s5.text} → ${s6.text}`);
+
+/* 清空：整盘变回空白，变了几格就是几步（皇后走掉之后那片自动 × 也算） */
+const litBeforeClear = await page.evaluate(() =>
+  document.querySelectorAll('.cell.is-x, .cell.is-q, .cell.is-auto').length);
 await page.click('#btnClear');
 await sleep(220);
 const s7 = await stepState();
-check('清空也算一步（可撤销）', Number(s7.text) === Number(s6.text) + 1, `${s6.text} → ${s7.text}`);
+check('清空按变化的格数算步',
+  Number(s7.text) === Number(s6.text) + litBeforeClear,
+  `${s6.text} → ${s7.text}，清了 ${litBeforeClear} 格`);
 
 /* 撤销栈到顶（UNDO_MAX = 60）之后步数照涨：栈里更早的几步撤不回去，
  * 但「这一局走了几步」跟能不能撤没关系，写成 60+ 就失去了参考意义。 */
@@ -394,8 +431,34 @@ check('这一局进了战绩', done.records >= 1, String(done.records));
 await page.screenshot({ path: `${OUT}/finish-05-won.png` });
 
 const after = await stepState();
-check('整串补齐只压一个撤销点', Number(after.text) === Number(before.text) + 1,
+check('整串补齐按只计步（8 只 = 8 步）', Number(after.text) === Number(before.text) + 8,
   `${before.text} → ${after.text}`);
+check('补齐只压一个撤销点（撤销一次就退回去）',
+  await page.evaluate(() => __QUEENS_DEBUG__.history().undo) >= 1);
+
+/* 步数不够补齐：剩下的皇后比剩下的步数多，就干脆不给补（2026-10-29 新增） */
+await newBoard(8);
+await markAllButQueens(0);
+await waitNudge(true);
+const budget = await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.state.stepLimit = d.state.steps + 3;    // 只留 3 步，可还差 8 只
+  return { steps: d.state.steps, limit: d.state.stepLimit };
+});
+await page.click('#btnFinish');
+await sleep(320);
+const refused = await page.evaluate(() => ({
+  queens: [...__QUEENS_DEBUG__.state.marks].filter(m => m === 2).length,
+  steps: __QUEENS_DEBUG__.state.steps,
+  hint: document.getElementById('hint').textContent,
+  status: __QUEENS_DEBUG__.state.status
+}));
+check('步数不够就不给补齐（一只都没落）',
+  refused.queens === 0 && refused.status === 'playing' && /步数不够补齐/.test(refused.hint),
+  `${refused.queens} 只 / ${refused.hint}`);
+check('被拒绝的补齐一步都不发', refused.steps === budget.steps,
+  `${budget.steps} → ${refused.steps}`);
+await page.evaluate(() => { __QUEENS_DEBUG__.state.stepLimit = 0; });
 
 // ============================================================
 // 4. 换局：数字归零、按钮退场

@@ -22,7 +22,7 @@ import { save } from '../core/storage.js';
 import { announce } from '../core/utils.js';
 import { closeGuide } from '../ui/guide.js';
 import { clearHintTimer, flashHint } from '../ui/hint.js';
-import { render } from '../ui/render.js';
+import { render, renderQuiet } from '../ui/render.js';
 import { markTrace } from '../ui/trace.js';
 import { canPlay } from './actions.js';
 import { pushRestorePoint } from './history.js';
@@ -75,7 +75,7 @@ export function restoreSnap() {
 
   sfx('restore');
   buzz([12, 26, 12]);
-  render();
+  renderQuiet();     // 回到记下的那一刻：改棋盘，但不算步
   save();
   flashHint('已回到记录点 · 撤销可退回', true, 2000);
   announce('已回到记录点');

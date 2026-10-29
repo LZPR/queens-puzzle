@@ -20,8 +20,13 @@ export const state = {
   marks: null,
   hints: 0,
   moves: 0,
-  /* 步数：这一局一共落了几次笔（每次改动棋盘算一次，见 app/history.js 的 pushHistory）。
-   * 它**不是**撤销栈的深度：撤销 / 重做不改它，刷新页面照样保留（存档里带着）；
+  /* 步数：这一局棋盘上**一共变了几格**（2026-10-29 起按格记账，见 ui/render.js）。
+   *   · 拖拽连涂一行：涂了几格就是几步（以前整整一笔只算一步）；
+   *   · 自动打的 × 也算：放一只皇后带出来的那一片 ×，落一格记一步；
+   *   · 双击放皇后**整个手势只算一格**：第一下标的那个 × 只是中间态，
+   *     onCell() 落子前把那一笔退回去（见 app/actions.js）；
+   *   · 撤销 / 重做 / 还原记录点 / 判错作废不算（那些是「回到走过的位置」）。
+   * 它**不是**撤销栈的深度：撤销不往回减、刷新页面照样保留（存档里带着）；
    * 撤销栈封顶 UNDO_MAX（更早的退不回去），这个数不封顶。
    * 挑战的「步数限制」看 stepLimit，用完还没解开就判负。 */
   steps: 0,
@@ -60,7 +65,9 @@ export const state = {
    *   autoMark  自动打 ×（同行 / 同列 / 相邻格 / 同色块）
    *   forced    唯一位置提示（某行某列某块只剩一格时亮一下）
    *   autoFill  「补齐」这颗按钮（原来跟着 noHint 走，现在单独一把）
-   * 每日挑战按挡位逐级关掉它们（见 core/daily.js 的 TIER_ASSISTS）；
+   * 都不再随难度变化（2026-10-29）：自定义照设置抄；每日挑战里 autoMark / autoFill
+   * 由玩家在换一局面板里自己挑（见 ui/panels/newgame.js 的 dailyAssist），
+   * **forced 在每日挑战里锁定为关**（那是答案泄漏，见 core/daily.js 的 rulesFor）。
    * 自动打的 × 上不许放皇后（见 app/actions.js），所以关掉自动标 × 也是一条真规则。 */
   autoMark: true,
   forced: true,
@@ -132,7 +139,11 @@ export const view = {
   lastConflictCount: 0,
   /* 抽奖资格用掉了没有：老虎机一弹出就记上（不管抽没抽、结果如何），
    * 关掉或者错过都算放弃。跟着局面走，换盘时由 applyBoard 复位。 */
-  drawUsed: false
+  drawUsed: false,
+  /* >0 时 render() 照画、但**不往 state.steps 记账**。给撤销 / 重做 / 还原记录点 /
+   * 判错作废这几条「回到走过的位置」的路用（见 ui/render.js 的 renderQuiet）。
+   * 用计数器而不是布尔：套着调的时候不会互相清掉。 */
+  quietSteps: 0
 };
 
 /** 棋盘上有没有玩家的痕迹（皇后或手标 ×）。计时靠它决定要不要起表。 */

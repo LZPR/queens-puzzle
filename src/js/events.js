@@ -27,6 +27,7 @@ import { flashHint } from './ui/hint.js';
 import { openNew } from './ui/panels/newgame.js';
 import { render } from './ui/render.js';
 import { bindSnap, snapTap } from './ui/snap.js';
+import { checkSteps } from './ui/win.js';
 
 // 松手 / 手势被打断 / 窗口失焦，都算结束（指针被捕获在老色卡上时也能兜住）
 window.addEventListener('pointerup', endPeek, true);
@@ -196,6 +197,9 @@ gridEl.addEventListener('pointermove', function (e) {
   if (changed) {
     render();
     paintTick();
+    /* 步数按格记账（见 ui/render.js）：一笔拖过去涂了十几格就是十几步，
+     * 所以涂抹途中也得判一次「步数用尽」——不能等松手才发现已经超了。 */
+    checkSteps();
   }
 });
 

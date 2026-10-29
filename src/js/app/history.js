@@ -17,7 +17,7 @@ import { save } from '../core/storage.js';
 import { announce } from '../core/utils.js';
 import { closeGuide } from '../ui/guide.js';
 import { flashHint } from '../ui/hint.js';
-import { render } from '../ui/render.js';
+import { renderQuiet } from '../ui/render.js';
 import { clearTrace, markTrace } from '../ui/trace.js';
 
 /* ==========================================================
@@ -43,10 +43,8 @@ function pushEntry() {
 
 export function pushHistory() {
   pushEntry();
-  /* 步数在这里涨：一次落笔 = 一步（拖动连涂一整行也只走这一处，所以算一步）。
-   * 只增不减——撤销 / 重做是「回到走过的位置」，不是又走了一步；
-   * 所以这个数跟撤销栈的深度不是一回事（栈还有 UNDO_MAX 封顶、刷新后会清空）。 */
-  state.steps++;
+  /* 步数不在这里涨了（2026-10-29）：改成「每变一格记一步」，由 ui/render.js 的
+   * render() 数出来（拖拽连涂、自动打的 × 一起算）。这里只负责压撤销点。 */
 }
 
 /* 记录点的「还原」走的也是这一条：**占一个撤销位，但不算一步**。
@@ -72,7 +70,7 @@ export function undo() {
   var moved = markTrace(before, state.marks);
   sfx('undo');
   buzz(6);
-  render();
+  renderQuiet();      // 回到走过的位置：改棋盘，但不涨步数
   save();
   announce(undoSpeech(moved));
 }
@@ -102,7 +100,7 @@ export function redo() {
   clearTrace();     // 往前走回刚才的位置，上一步的残影这时候不该还亮着
   sfx('redo');
   buzz(6);
-  render();
+  renderQuiet();    // 跟撤销同一个口径：不算往前走了一步
   save();
   announce('已重做');
 }

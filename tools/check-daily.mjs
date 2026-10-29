@@ -99,7 +99,12 @@ const panel = () => page.evaluate(() => {
     autoMark: document.getElementById('swAutoMark').getAttribute('aria-checked'),
     forced: document.getElementById('swForced').getAttribute('aria-checked'),
     autoFill: document.getElementById('swAutoFill').getAttribute('aria-checked'),
-    switchesLocked: [...document.querySelectorAll('#newSheet .switch')].every(b => b.disabled),
+    /* 2026-10-29 起：三把「禁用」+「唯一位置提示」（锁定为关）都是灰的，
+     * 两颗辅助（自动标 × / 自动补全）可以拨——它们不再随难度变化。 */
+    lockedSwitches: [...document.querySelectorAll('#newSheet .switch')]
+      .filter(b => b.disabled).map(b => b.id).sort(),
+    freeSwitches: [...document.querySelectorAll('#newSheet .switch')]
+      .filter(b => !b.disabled).map(b => b.id).sort(),
     limitHint: txt('limitHint').trim(),
     stepHint: txt('stepHint').trim(),
     lifeHint: txt('lifeHint').trim(),
@@ -194,7 +199,7 @@ await sleep(420);
 p = await panel();
 ok('标签切到「每日挑战」', p.modeOn === 'tabModeDaily', p.modeOn);
 ok('切过去自动摊开挑战组', p.challengeOpen);
-ok('标题说明这一组是锁着的', /已锁定/.test(p.title), p.title);
+ok('标题说明这一组是今天的规矩', /今日规矩/.test(p.title), p.title);
 ok('每日里没有「不限」难度', p.diffs.every(d => d.lv !== 'any' || d.hid), p.diffs);
 ok('第一档「容易」开着', p.diffs.some(d => d.lv === 'easy' && !d.dis && d.on), p.diffs);
 ok('后面四档今天还锁着',
@@ -219,11 +224,26 @@ ok('标错挡位全灰', p.lifeAllDisabled);
 ok('禁用提示开 / 撤销关 / 记录点可用',
   p.noHint === 'true' && p.noUndo === 'false' && p.noSnap === 'false',
   `${p.noHint}/${p.noUndo}/${p.noSnap}`);
-ok('六颗开关都锁着', p.switchesLocked);
-/* 三样辅助按挡位递进关（2026-10-29）：容易这一挡三样全开 */
-ok('容易这一挡三样辅助都开着',
-  p.autoMark === 'true' && p.forced === 'true' && p.autoFill === 'true',
-  `${p.autoMark}/${p.forced}/${p.autoFill}`);
+/* 三把「禁用」+「唯一位置提示」锁着；两颗辅助（自动标 × / 自动补全）可以拨——
+ * 它们不再随难度变化，选择权在玩家手上。 */
+ok('三把禁用 + 唯一位置提示锁着、两颗辅助能拨',
+  JSON.stringify(p.lockedSwitches) ===
+    JSON.stringify(['swForced', 'swNoHint', 'swNoSnap', 'swNoUndo']) &&
+  JSON.stringify(p.freeSwitches) === JSON.stringify(['swAutoFill', 'swAutoMark']),
+  `锁=${p.lockedSwitches} 可拨=${p.freeSwitches}`);
+/* 唯一位置提示：功能还在（自定义那一路能拨），每日挑战里锁定为关 */
+ok('唯一位置提示那颗开关还在、每日里是关着的',
+  p.forced === 'false' &&
+  (await page.evaluate(() => !!document.getElementById('swForced'))));
+ok('每日里点「唯一位置提示」拨不动',
+  await page.evaluate(() => {
+    const el = document.getElementById('swForced');
+    const before = el.getAttribute('aria-checked');
+    el.click();
+    return el.disabled && el.getAttribute('aria-checked') === before && before === 'false';
+  }));
+ok('两颗辅助默认都开着',
+  p.autoMark === 'true' && p.autoFill === 'true', `${p.autoMark}/${p.autoFill}`);
 ok('每排说明都对着今天的抽签说话',
   (easyRule.skip === 'time' ? /不比限时/.test(p.limitHint) : /固定限时/.test(p.limitHint)) &&
   (easyRule.skip === 'steps' ? /不比步数/.test(p.stepHint) : /固定限步/.test(p.stepHint)) &&
@@ -231,27 +251,25 @@ ok('每排说明都对着今天的抽签说话',
   [p.limitHint, p.stepHint, p.lifeHint]);
 ok('摘要只列今天真比的两样',
   p.sum === eUI.bits.concat(['无提示']).join(' · '), p.sum);
-/* 三样辅助不抽签，只按挡位定：较难起关补齐、困难起再关自动 ×、极难连定位也关。
- * 直接对着 ruleOf() 的纯函数值验一遍五挡。 */
+/* 两颗辅助**不再随难度变化**（2026-10-29 撤掉了 TIER_ASSISTS）：五挡都是全开，
+ * 唯一位置提示则在每日挑战里锁定为关。直接对着 ruleOf() 的纯函数值验一遍五挡。 */
 const assistTable = await page.evaluate(() => ['easy', 'mid', 'advanced', 'hard', 'extreme']
   .map(t => {
     const r = __QUEENS_DEBUG__.dailyRuleOf(t, __QUEENS_DEBUG__.daily().day);
     return [t, r.autoFill, r.autoMark, r.forced];
   }));
 const assistWant = [
-  ['easy', true, true, true],
-  ['mid', true, true, true],
-  ['advanced', false, true, true],
-  ['hard', false, false, true],
-  ['extreme', false, false, false]
+  ['easy', true, true, false],
+  ['mid', true, true, false],
+  ['advanced', true, true, false],
+  ['hard', true, true, false],
+  ['extreme', true, true, false]
 ];
-ok('辅助按挡位递进关（较难关补齐 / 困难关自动 × / 极难关定位）',
+ok('两颗辅助五挡全开、定位恒关（不再随难度变化）',
   JSON.stringify(assistTable) === JSON.stringify(assistWant), JSON.stringify(assistTable));
 ok('辅助不进「真比哪两样」的抽签',
-  (() => {
-    const [t, f, m, p2] = assistTable[2];
-    return t === 'advanced' && f === false && m === true && p2 === true;
-  })());
+  assistTable.every(([, , , forced]) => forced === false) &&
+  new Set(assistTable.map(a => a[1] + '' + a[2])).size === 1);
 ok('难度那行说清解锁关系', /解锁/.test(p.diffHint), p.diffHint);
 ok('尺寸那行说是最大盘', /5×5/.test(p.sizeHint), p.sizeHint);
 ok('按钮变成「开始今日挑战」', p.shuffle === '开始今日挑战', p.shuffle);
@@ -282,8 +300,8 @@ ok('提示锁 / 记录点可用 / 撤销开着', g.hintDisabled && !g.snapLocked
   `${g.hintDisabled}/${g.snapLocked}/${g.undoLocked}`);
 ok('这一局记着是每日挑战', g.daily && g.daily.day === today.day && g.daily.tier === 'easy',
   JSON.stringify(g.daily));
-ok('容易这一挡：自动标 × / 定位 / 补齐都开着',
-  g.autoMark === true && g.forced === true && g.autoFill === true,
+ok('容易这一挡：两颗辅助都开着、定位关着',
+  g.autoMark === true && g.autoFill === true && g.forced === false,
   `${g.autoMark}/${g.forced}/${g.autoFill}`);
 ok('补齐按钮该在（还没到「只差皇后」，先收着）', g.fillHidden === true, g.fillHidden);
 ok('玩家自己的设置没被改写',
@@ -298,6 +316,26 @@ await jsClick('#btnShuffle');
 await waitFreshBoard(null);
 g = await game();
 ok('同一挡再来一局，盘面一模一样', g.regions === first, g.regions.slice(0, 12) + '…');
+
+/* 两颗辅助在每日挑战里也能拨（2026-10-29）：关掉自动补全，下一盘就不给补齐；
+ * 拨回来又开着。选择记在面板模块里，再打开面板还是刚才拨的那一边。 */
+await openSheet();
+await page.evaluate(() => document.getElementById('swAutoFill').click());
+await jsClick('#btnShuffle');
+await waitFreshBoard(null);
+const offFill = await game();
+ok('每日里关掉「自动补全」：下一盘不给补齐，自动 × 还在',
+  offFill.autoFill === false && offFill.autoMark === true,
+  `${offFill.autoFill}/${offFill.autoMark}`);
+await openSheet();
+const stillOff = await page.evaluate(() =>
+  document.getElementById('swAutoFill').getAttribute('aria-checked'));
+ok('再打开面板，刚才拨的那颗还记着', stillOff === 'false', stillOff);
+await page.evaluate(() => document.getElementById('swAutoFill').click());
+await jsClick('#btnShuffle');
+await waitFreshBoard(null);
+ok('拨回来之后又开着', (await game()).autoFill === true);
+
 await page.evaluate(() => { __QUEENS_DEBUG__.newGame(6); });
 await page.waitForFunction(() => __QUEENS_DEBUG__.state.size === 6 && !__QUEENS_DEBUG__.state.daily,
   { timeout: 20000 });
@@ -494,11 +532,14 @@ ok('极难 = 16×16 + 今天抽到的两项',
   p.stepOn.join() === xUI.stepOn.join() && p.lifeOn.join() === xUI.lifeOn.join(),
   [p.sizeVal, p.limitOn, p.stepOn, p.lifeOn].join('/'));
 ok('面板说今天已完成', /今日已完成/.test(p.note), p.note);
-/* 极难：三样辅助全关，开关上就该是「关着」且锁死 */
-ok('极难：三样辅助全关（补齐 / 自动 × / 定位）',
-  p.autoFill === 'false' && p.autoMark === 'false' && p.forced === 'false',
+/* 极难：辅助也全开（不再随难度关），两颗开关仍然能拨，定位照样锁着且是关的 */
+ok('极难：两颗辅助照样开着（不再随难度关）',
+  p.autoFill === 'true' && p.autoMark === 'true' && p.forced === 'false',
   `${p.autoFill}/${p.autoMark}/${p.forced}`);
-ok('锁着的辅助开关点不动', p.switchesLocked);
+ok('极难：三把禁用 + 定位照样锁着',
+  JSON.stringify(p.lockedSwitches) ===
+    JSON.stringify(['swForced', 'swNoHint', 'swNoSnap', 'swNoUndo']),
+  p.lockedSwitches);
 /* 停在还没打完的「极难」上：这一天虽然已经算完成，但这一挡还是第一次打 */
 ok('按钮是「开始今日挑战」（极难还没打过）', p.shuffle === '开始今日挑战', p.shuffle);
 await page.screenshot({ path: `${SHOTS}/daily-6-late.png` });
@@ -506,11 +547,11 @@ await page.screenshot({ path: `${SHOTS}/daily-6-late.png` });
 await jsClick('#btnShuffle');
 await waitFreshBoard(null);
 const xg = await game();
-ok('极难落地：三样辅助全关',
-  xg.autoMark === false && xg.forced === false && xg.autoFill === false,
+ok('极难落地：两颗辅助开着、定位关着',
+  xg.autoMark === true && xg.autoFill === true && xg.forced === false,
   `${xg.autoMark}/${xg.forced}/${xg.autoFill}`);
-ok('极难：盘上没有自动 ×、也不亮唯一位置',
-  await page.evaluate(() => document.querySelectorAll('.cell.is-auto, .cell.is-forced').length === 0));
+ok('极难：不亮唯一位置（自动 × 要放了皇后才有，开局盘上是空的）',
+  await page.evaluate(() => document.querySelectorAll('.cell.is-forced').length === 0));
 await closeSheet();
 
 console.log('\n--- 9. 刷新：还是同一局、锁还在 ---');
@@ -535,8 +576,7 @@ ok('盘面没变', back.regions === beforeReload.regions);
 ok('刷新后规矩按「日期 + 档位」重算，一项不差',
   back.limit === midRule.limit && back.stepLimit === midRule.steps &&
   back.noHint === true && back.noUndo === false && back.noSnap === false &&
-  back.autoMark === midRule.autoMark && back.forced === midRule.forced &&
-  back.autoFill === midRule.autoFill,
+  back.autoMark === true && back.forced === false && back.autoFill === true,
   `${back.limit}/${back.stepLimit}/${back.noHint}/${back.noUndo}/${back.noSnap}` +
   ` · 辅助 ${back.autoMark}/${back.forced}/${back.autoFill}`);
 
@@ -652,7 +692,7 @@ const matrix = await page.evaluate(() => {
   const f = __QUEENS_DEBUG__.dailyRuleOf;
   const tiers = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
   const MS = { easy: 180000, mid: 300000, advanced: 600000, hard: 900000, extreme: 1200000 };
-  const ST = { easy: 60, mid: 100, advanced: 150, hard: 250, extreme: 400 };
+  const ST = { easy: 40, mid: 100, advanced: 300, hard: 400, extreme: 400 };
   const pad = n => (n < 10 ? '0' : '') + n;
   const combos = {}, bad = [];
   for (let i = 0; i < 150; i++) {

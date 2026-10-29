@@ -7,11 +7,12 @@
  *   每日挑战 —— 一天一盘，只跟日期有关（见 core/daily.js / app/daily.js）：
  *                难度五挡，完成前一挡才解锁下一挡；棋盘固定该挡最大盘；
  *                **限时 / 限步 / 标错惩罚里每天每挡只抽两样**（限时按挡位
- *                3/5/10/15/20 分、限步按挡位 60/100/150/250/400 步、标错固定
- *                3 条命），剩下一项这局不设限；禁用提示、可以撤销、记录点可用；
- *                三个辅助随难度关掉：较难关自动补全、困难再关自动标 ×、
- *                极难连唯一位置提示也关（见 core/daily.js 的 TIER_ASSISTS）。
- *                这些全锁着，改不了。
+ *                3/5/10/15/20 分、限步按挡位 40/100/300/400/400 步、标错固定
+ *                3 条命），剩下一项这局不设限；禁用提示、可以撤销、记录点可用。
+ *                **自动标 × / 自动补全不随难度变**（2026-10-29 改）：默认都开，
+ *                玩家在这一组里自己关，点「开始今日挑战」时生效；
+ *                **唯一位置提示在这一路里锁定为关**（它是答案泄漏，开关灰着拨不动）。
+ *                除这两颗可拨的辅助，其余全锁着，改不了。
  *
  * 自定义那一路的三组（尺寸 / 难度 / 挑战）都只写 pending，点「换一局」才落地
  * ——中途改完不换局就等于没改（开了限时又反悔，也不用担心这局被计时追着跑）。
@@ -138,7 +139,7 @@ export var HTML = /* html */ `
       </div>
 
       <div class="limit-row">
-        <div class="stepper-label">步数限制<small id="stepHint">用完还没解开就算输；拖动连涂一整行只算一步</small></div>
+        <div class="stepper-label">步数限制<small id="stepHint">用完还没解开就算输；每变一格算一步</small></div>
         <!-- 挡位按钮按 core/config.js 的 STEP_OPTIONS 生成，见 buildStepOpts -->
         <div class="limit-opts" id="stepOpts" role="group" aria-label="步数限制"></div>
       </div>
@@ -149,10 +150,10 @@ export var HTML = /* html */ `
         <div class="limit-opts" id="lifeOpts" role="group" aria-label="标错惩罚"></div>
       </div>
 
-      <!-- 三个「辅助」：自动标 × / 唯一位置提示原来是设置里的偏好，2026-10-29 搬到这里。
-           它们现在是**这一局的规矩**（每日挑战按挡位逐级关掉），所以跟限时一样
-           只在点「换一局」时落地、中途改不了。自动补全原来跟着「禁用提示」走，
-           现在单独一颗——禁用提示只管提示按钮。 -->
+      <!-- 三个「辅助」：自动标 × / 唯一位置提示 / 自动补全。它们是**这一局的规矩**，
+           所以跟限时一样只在点「换一局」时落地。每日挑战里前一颗与最后一颗是可改的
+           （不再随难度变化），中间那颗「唯一位置提示」**锁定为关**——它是答案泄漏，
+           那一颗在每日挑战里灰着拨不动；限时 / 步数 / 标错那三项也锁死。 -->
       <div class="switch-row">
         <div class="stepper-label">自动标 ×<small>同行同列和同色块自动打叉</small></div>
         <button class="switch" id="swAutoMark" type="button" role="switch" aria-checked="true" aria-label="自动标记"></button>
@@ -204,9 +205,14 @@ var ctl = null;
 /* 面板自己的临时视图，只有这一页会读，不落盘：
  *   mode         'custom' | 'daily'
  *   challenge    挑战组摊开没摊开（只是这一页的观感，不需要持久化）
+ *   dailyAssist  每日挑战里玩家挑的那两颗辅助（自动标 × / 自动补全）。
+ *                这两颗现在**不再随难度变化**，所以选择权在玩家；记在模块里
+ *                而不是 settings，是因为它不属于「自定义的默认值」那一套。
+ *                每日挑战开新盘时按它走（见 btnShuffle 那一颗的点击）。
  * 两条都在同一次会话里记着：关了面板再打开，还是刚才那一路、那个开合状态。 */
 var mode = 'custom';
 var challengeOpen = false;
+var dailyAssist = { autoMark: true, autoFill: true };
 
 /* ==========================================================
    每日挑战：今天、哪一挡、锁没锁
@@ -241,10 +247,12 @@ function applyMode() {
     pending.noHint = true;
     pending.noUndo = false;
     pending.noSnap = false;
-    /* 三个辅助按挡位（较难关补齐、困难再关自动 ×、极难连定位也关） */
-    pending.autoMark = r.autoMark;
-    pending.forced = r.forced;
-    pending.autoFill = r.autoFill;
+    /* 两颗辅助不跟挡位走（2026-10-29 起）：默认全开，之后由玩家自己拨，
+     * 拨过的选择留在 dailyAssist 里，切挡位 / 关面板都不会把它冲掉。
+     * 唯一位置提示例外：这一路里它**锁定为关**（开关灰着，摘要里照实写）。 */
+    pending.autoMark = dailyAssist.autoMark;
+    pending.autoFill = dailyAssist.autoFill;
+    pending.forced = false;
     return;
   }
 
@@ -431,12 +439,14 @@ function challengeSumText() {
 }
 
 /* 关掉的辅助拼成一小段（开着的不提）：摘要与按钮下方那行共用。
- * 每日挑战的三样由挡位决定（见 core/daily.js 的 TIER_ASSISTS）。 */
+ * 每日挑战里传进来的是 pending，forced 恒 false —— 所以那一行每天都会写「无定位」，
+ * 这正好说明今天没有这层光（它跟「无提示」一样是恒定项）。
+ * 只认真 false：自定义里 pending.forced 一定是布尔，不受影响。 */
 function assistOffBits(a) {
   var bits = [];
   if (!a.autoFill) bits.push('无补全');
   if (!a.autoMark) bits.push('无自动×');
-  if (!a.forced) bits.push('无定位');
+  if (a.forced === false) bits.push('无定位');
   return bits;
 }
 
@@ -646,15 +656,17 @@ export function syncNew() {
   setSwitch('swNoHint', pending.noHint, daily);
   setSwitch('swNoUndo', pending.noUndo, daily);
   setSwitch('swNoSnap', pending.noSnap, daily);
-  /* 三个辅助：自定义只写 pending，每日挑战按挡位写死（灰掉 = 这一挡就是这样） */
-  setSwitch('swAutoMark', pending.autoMark, daily);
+  /* 三颗辅助：自动标 × / 自动补全两种玩法都能拨（2026-10-29 放开的），
+   * 差别只在「什么时候生效」：自定义等「换一局」，每日挑战等「开始今日挑战」。
+   * 唯一位置提示例外：每日挑战里**锁着**（灰着、恒关），所以那颗还是传 daily。 */
+  setSwitch('swAutoMark', pending.autoMark, false);
   setSwitch('swForced', pending.forced, daily);
-  setSwitch('swAutoFill', pending.autoFill, daily);
+  setSwitch('swAutoFill', pending.autoFill, false);
 
   // 有没落地的改动就把组标题点亮，别让人以为已经生效了。
-  // 每日挑战没有「待生效」这回事，它说的是「已锁定」。
+  // 每日挑战没有「待生效」这回事：它说的是「今日规矩」，只有两颗辅助能拨。
   var cbits = daily ? [] : challengeBits();
-  challengeTitle.textContent = daily ? '挑战 · 已锁定'
+  challengeTitle.textContent = daily ? '挑战 · 今日规矩'
     : (cbits.length ? '挑战 · 待换一局生效' : '挑战');
   challengeTitle.classList.toggle('is-pending', cbits.length > 0);
   challengeSum.textContent = challengeSumText();
@@ -689,9 +701,9 @@ export function syncShuffleRow() {
     btnShuffle.classList.toggle('is-pending', !done);
     shuffleHint.classList.toggle('is-pending', false);
     /* 这一行是可换行的说明，规则的细节都放这里：真比的那两样 + 恒定项 +
-     * 这一挡关掉的辅助（标题那条摘要塞不下，见 challengeSumText）。 */
+     * 玩家关掉的那两颗辅助（标题那条摘要塞不下，见 challengeSumText）。 */
     shuffleHint.textContent = '今日 ' + band.name + ' ' + r.size + '×' + r.size +
-      ' · ' + dailyRuleBits(r).concat(['无提示'], assistOffBits(r)).join(' · ') +
+      ' · ' + dailyRuleBits(r).concat(['无提示'], assistOffBits(pending)).join(' · ') +
       (done ? ' · 今天打过了，只刷新时间' : '');
     return;
   }
@@ -860,17 +872,14 @@ export function mount(host) {
       pending.difficulty = lv;
       var r = ruleOf(lv, today());
       pending.size = r.size;
-      /* 换挡就换一组规矩：抽到哪两样、步数与命数都跟着这一挡走 */
+      /* 换挡就换一组规矩：抽到哪两样、步数与命数都跟着这一挡走。
+       * 两颗辅助**不跟挡位走**（它们已经不受难度影响了），保持玩家自己拨的。 */
       pending.timeLimit = r.limit;
       pending.stepLimit = r.steps;
       pending.lifeLimit = r.lives;
-      /* 三个辅助也按挡位走：较难关补齐、困难再关自动 ×、极难连定位也关 */
-      pending.autoMark = r.autoMark;
-      pending.forced = r.forced;
-      pending.autoFill = r.autoFill;
       syncNew();
       announce('今日挑战：' + DIFF_BANDS[lv].name + ' ' + r.size + '×' + r.size +
-        '，' + dailyRuleBits(r).concat(assistOffBits(r)).join(' · '));
+        '，' + dailyRuleBits(r).concat(assistOffBits(pending)).join(' · '));
       return;
     }
 
@@ -919,7 +928,11 @@ export function mount(host) {
       var tier = pending.difficulty;
       if (!tier || !ruleOf(tier, day) || !unlocked(day, tier)) return;
       closeNew();
-      newDaily(tier);
+      /* 两颗辅助按玩家这一页里拨的走（不写 settings：每日挑战不该改写
+       * 玩家自定义的默认值，见 app/puzzle.js 的 applyBoard）。 */
+      dailyAssist.autoMark = pending.autoMark !== false;
+      dailyAssist.autoFill = pending.autoFill !== false;
+      newDaily(tier, dailyAssist);
       return;
     }
 
@@ -947,12 +960,14 @@ export function mount(host) {
   });
 
   /* 挑战那几颗开关：跟限时 / 步数一样只写 pending，换一局才生效。
-   * 每日挑战里它们是锁着的（按钮 disabled，键盘也点不到）。
-   * 三个辅助（自动标 × / 唯一位置提示 / 自动补全）跟三把锁同一个规矩。 */
+   * 每日挑战里只放开两颗辅助（自动标 × / 自动补全）——它们不再随难度变化，
+   * 由玩家自己挑，点「开始今日挑战」时生效。其余三把锁与「唯一位置提示」
+   * 都是灰的（定位在每日挑战里锁定为关，见 applyMode）。 */
   sheet.addEventListener('click', function (e) {
     var sw = e.target.closest ? e.target.closest('.switch') : null;
     if (!sw) return;
-    if (mode === 'daily') return;
+    var assist = sw.id === 'swAutoMark' || sw.id === 'swAutoFill';
+    if (mode === 'daily' && !assist) return;
     if (sw.id === 'swNoHint') {
       pending.noHint = !pending.noHint;
       announce(pending.noHint ? '挑战：换一局后禁用提示' : '挑战：换一局后恢复提示');
@@ -964,13 +979,19 @@ export function mount(host) {
       announce(pending.noSnap ? '挑战：换一局后禁用记录点' : '挑战：换一局后恢复记录点');
     } else if (sw.id === 'swAutoMark') {
       pending.autoMark = !pending.autoMark;
-      announce(pending.autoMark ? '挑战：换一局后自动标 ×' : '挑战：换一局后不自动标 ×');
+      if (mode === 'daily') dailyAssist.autoMark = pending.autoMark;
+      announce(pending.autoMark
+        ? (mode === 'daily' ? '今日挑战：自动标 ×' : '挑战：换一局后自动标 ×')
+        : (mode === 'daily' ? '今日挑战：不自动标 ×' : '挑战：换一局后不自动标 ×'));
     } else if (sw.id === 'swForced') {
       pending.forced = !pending.forced;
       announce(pending.forced ? '挑战：换一局后提示唯一位置' : '挑战：换一局后不提示唯一位置');
     } else if (sw.id === 'swAutoFill') {
       pending.autoFill = !pending.autoFill;
-      announce(pending.autoFill ? '挑战：换一局后可以一键补齐' : '挑战：换一局后不给一键补齐');
+      if (mode === 'daily') dailyAssist.autoFill = pending.autoFill;
+      announce(pending.autoFill
+        ? (mode === 'daily' ? '今日挑战：可以一键补齐' : '挑战：换一局后可以一键补齐')
+        : (mode === 'daily' ? '今日挑战：不给一键补齐' : '挑战：换一局后不给一键补齐'));
     } else {
       return;
     }

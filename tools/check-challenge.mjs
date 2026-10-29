@@ -446,14 +446,14 @@ ui = await sheetUi();
 ok('面板上步数限制停在「不限」', ui.stepOn.length === 1 && ui.stepOn[0] === '不限', ui.stepOn);
 
 /* 跟限时一个规矩：只写 pending */
-await jsClick('#stepOpts .lbtn[data-steps="60"]');
+await jsClick('#stepOpts .lbtn[data-steps="40"]');
 await sleep(260);
 ui = await sheetUi();
 const pStep = await st();
-ok('选中 60 步', ui.stepOn[0] === '60 步', ui.stepOn);
+ok('选中 40 步', ui.stepOn[0] === '40 步', ui.stepOn);
 ok('步数限制说明写明换一局后生效', /换一局后生效/.test(ui.stepHint), ui.stepHint);
 ok('标题提示待生效', ui.titlePending, ui.title);
-ok('待生效清单里有「限步 60 步」', /限步 60 步/.test(ui.shuffleHint), ui.shuffleHint);
+ok('待生效清单里有「限步 40 步」', /限步 40 步/.test(ui.shuffleHint), ui.shuffleHint);
 ok('这一局的步数限制还没变', pStep.stepLimit === 0, pStep.stepLimit);
 ok('设置没被写盘', pStep.saved.stepLimit === 0, pStep.saved.stepLimit);
 await page.screenshot({ path: `${SHOTS}/d8-steps-pending.png` });
@@ -461,14 +461,14 @@ await page.screenshot({ path: `${SHOTS}/d8-steps-pending.png` });
 const seed5 = await snap();
 await shuffle(seed5.seed);
 let sl = await st();
-ok('换局后限步落地：60', sl.stepLimit === 60, sl.stepLimit);
-ok('信息条尾缀变成 /60、读数从 0 起', sl.stepText === '0' && sl.stepUnit === '/60', sl.stepText + sl.stepUnit);
-ok('设置已写盘', sl.saved.stepLimit === 60, sl.saved.stepLimit);
+ok('换局后限步落地：40', sl.stepLimit === 40, sl.stepLimit);
+ok('信息条尾缀变成 /40、读数从 0 起', sl.stepText === '0' && sl.stepUnit === '/40', sl.stepText + sl.stepUnit);
+ok('设置已写盘', sl.saved.stepLimit === 40, sl.saved.stepLimit);
 
-/* 一路点到第 60 步：一步一格，第 60 步用完就判负 */
+/* 一路点到第 40 步：一步一格（按格记账），第 40 步用完就判负 */
 await page.evaluate(() => {
   const cells = [...document.querySelectorAll('.cell')];
-  for (let i = 0; i < 60; i++) cells[i].click();
+  for (let i = 0; i < 40; i++) cells[i].click();
 });
 await sleep(800);
 const over = await page.evaluate(() => {
@@ -492,17 +492,17 @@ const over = await page.evaluate(() => {
     rec: { won: rec.won, sl: rec.sl, st: rec.st, lr: rec.lr }
   };
 });
-ok('第 60 步用完就判负', over.status === 'lost' && over.lostBy === 'steps', `${over.status}/${over.lostBy}`);
+ok('第 40 步用完就判负', over.status === 'lost' && over.lostBy === 'steps', `${over.status}/${over.lostBy}`);
 ok('结果层是 lost 版', over.open && over.kind === 'lost', over.kind);
 ok('文案是「步数用尽」', over.title === '步数用尽' && over.kicker === 'OUT OF MOVES', `${over.title}/${over.kicker}`);
-ok('中间那格换成「限步 60」', over.timeLbl === '限步' && over.time === '60', `${over.timeLbl}=${over.time}`);
-ok('副标题写清限步与还差几只', /限步 60 步/.test(over.sub) && /还差/.test(over.sub), over.sub);
+ok('中间那格换成「限步 40」', over.timeLbl === '限步' && over.time === '40', `${over.timeLbl}=${over.time}`);
+ok('副标题写清限步与还差几只', /限步 40 步/.test(over.sub) && /还差/.test(over.sub), over.sub);
 ok('按钮是重试 / 换一局新的', over.btn === '重试这一局' && over.alt === '换一局新的', `${over.btn}/${over.alt}`);
 ok('棋盘压暗封盘', over.boardLost);
-ok('信息条停在 60/60', over.hud === '60/60', over.hud);
-ok('封盘后多点的那几下不算步数', over.steps === 60, over.steps);
-ok('战绩记下这一局（没解开 / 限步 60 / 原因是步数）',
-  over.rec.won === false && over.rec.sl === 60 && over.rec.st === 60 && over.rec.lr === 'steps',
+ok('信息条停在 40/40', over.hud === '40/40', over.hud);
+ok('封盘后多点的那几下不算步数', over.steps === 40, over.steps);
+ok('战绩记下这一局（没解开 / 限步 40 / 原因是步数）',
+  over.rec.won === false && over.rec.sl === 40 && over.rec.st === 40 && over.rec.lr === 'steps',
   JSON.stringify(over.rec));
 await page.screenshot({ path: `${SHOTS}/d9-steps-lost.png` });
 
@@ -514,8 +514,8 @@ const retry2 = await st();
 ok('重试回到 playing', retry2.status === 'playing', retry2.status);
 ok('重试还是同一盘棋',
   await page.evaluate(() => Array.from(__QUEENS_DEBUG__.state.regions).join()) === regionsBefore);
-ok('步数归零、限步还在', retry2.steps === 0 && retry2.stepLimit === 60, `${retry2.steps}/${retry2.stepLimit}`);
-ok('信息条回到 0/60', retry2.stepText === '0' && retry2.stepUnit === '/60', retry2.stepText + retry2.stepUnit);
+ok('步数归零、限步还在', retry2.steps === 0 && retry2.stepLimit === 40, `${retry2.steps}/${retry2.stepLimit}`);
+ok('信息条回到 0/40', retry2.stepText === '0' && retry2.stepUnit === '/40', retry2.stepText + retry2.stepUnit);
 
 /* 刷新：步数跟着存档回来（撤销栈不落盘，两者在这里分道扬镳） */
 await page.evaluate(() => {
@@ -530,14 +530,15 @@ await sleep(800);
 const back2 = await st();
 ok('刷新前走了 5 步', beforeReload.steps === 5, beforeReload.steps);
 ok('刷新后步数还在', back2.steps === 5, back2.steps);
-ok('刷新后信息条还是 5/60', back2.stepText === '5' && back2.stepUnit === '/60', back2.stepText + back2.stepUnit);
-ok('刷新后限步还在', back2.stepLimit === 60, back2.stepLimit);
+ok('刷新后信息条还是 5/40', back2.stepText === '5' && back2.stepUnit === '/40', back2.stepText + back2.stepUnit);
+ok('刷新后限步还在', back2.stepLimit === 40, back2.stepLimit);
 ok('刷新后没被误判负', back2.status === 'playing', back2.status);
 
-/* 320 窄屏：平时「步」这个字会让出去，但 /60 是「还剩几步」的读数，不能省 */
+/* 320 窄屏：平时「步」这个字会让出去，但 /40 是「还剩几步」的读数，不能省。
+ * 补点到 30 步：别把 40 步用光（用光了这一局就封盘了） */
 await page.evaluate(() => {
   const cells = [...document.querySelectorAll('.cell')];
-  for (let i = 5; i < 50; i++) cells[i].click();
+  for (let i = 5; i < 30; i++) cells[i].click();
 });
 await sleep(300);
 await page.setViewport({ width: 320, height: 640, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -549,7 +550,7 @@ const narrow = await page.evaluate(() => ({
   overflow: document.getElementById('btnHud').scrollWidth - document.getElementById('btnHud').clientWidth,
   docOverflow: document.documentElement.scrollWidth - window.innerWidth
 }));
-ok('320 窄屏上 /60 还留着', narrow.unit === '/60' && narrow.unitShown, JSON.stringify(narrow));
+ok('320 窄屏上 /40 还留着', narrow.unit === '/40' && narrow.unitShown, JSON.stringify(narrow));
 ok('320 窄屏不溢出', narrow.overflow <= 0 && narrow.docOverflow <= 0,
   `${narrow.overflow}/${narrow.docOverflow} 数字=${narrow.text}`);
 await page.screenshot({ path: `${SHOTS}/d10-steps-320.png` });

@@ -321,8 +321,10 @@ export function applyBoard(n, regions, solution, seed, preVibe, rules) {
   state.noHint = r ? !!r.noHint : !!settings.noHint;
   state.noUndo = r ? !!r.noUndo : !!settings.noUndo;
   state.noSnap = r ? !!r.noSnap : !!settings.noSnap;
-  /* 三个「辅助」：每日挑战按挡位关（较难关补齐、困难再关自动 ×、极难连定位也关），
-   * 自定义照设置抄。0 / 缺字段都算「开着」——老存档与分享码里没有这几项。 */
+  /* 三个「辅助」：自定义照设置抄，每日挑战按 rules 来——自动标 × / 自动补全
+   * 按玩家在面板里选的那两颗（不传就是默认全开，见 core/daily.js 的 rulesFor），
+   * **唯一位置提示在每日挑战里锁定为关**（rules 里恒 false，开关也灰着）。
+   * 0 / 缺字段都算「开着」——老存档与分享码里没有这几项。 */
   state.autoMark = r ? r.autoMark !== false : settings.autoMark !== false;
   state.forced = r ? r.forced !== false : settings.forced !== false;
   state.autoFill = r ? r.autoFill !== false : settings.autoFill !== false;
@@ -390,8 +392,10 @@ export function retryGame() {
    棋盘由 app/daily.js 按「日期 + 档位」算种子生成，同一档永远是同一盘。
    出题这几百毫秒里棋盘同样只读（view.rolling），跟 roll() 一个规矩：
    遮罩挡得住鼠标，挡不住键盘。
+   assists 是玩家在面板里选的那两颗「辅助」（{autoMark, autoFill}）：
+   不传就按默认全开。限时 / 限步 / 标错那三项照旧只认日期 + 档位。
    ========================================================== */
-export function newDaily(tier) {
+export function newDaily(tier, assists) {
   var day = dayKey();
   var rule = ruleOf(tier, day);
   if (!rule) return;
@@ -422,7 +426,7 @@ export function newDaily(tier) {
     blockCost[rule.size] = Math.max(blockCost[rule.size] || 0, taken);
 
     applyBoard(got.board.size, got.board.regions, got.board.solution,
-      got.board.seed, got.vibe, rulesFor(day, tier));
+      got.board.seed, got.vibe, rulesFor(day, tier, assists || null));
 
     sfx('new');
     /* 播报今天真比的那两样（没抽到的那一项别念成「不限时」） */

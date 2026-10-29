@@ -24,7 +24,8 @@ import { fadeCell, settleFade } from './fade.js';
 export function render(anim) {
   var n = state.size;
   /* 自动打 × / 唯一位置提示现在是**这一局的规矩**（state.*），不再是设置里的偏好：
-   * 每日挑战会按挡位把它们逐级关掉，而玩家自己的设置可能开着（见 core/state.js）。 */
+   * 每日挑战里前一颗由玩家自己挑、后一颗锁死为关，而玩家自己的设置可能都开着
+   * （见 core/state.js）。 */
   var auto = state.autoMark ? computeAuto() : new Uint8Array(n * n);
   var cf = computeConflicts();
   var forced = state.forced ? computeForced(auto) : new Uint8Array(n * n);
@@ -38,6 +39,13 @@ export function render(anim) {
   // 注意这里只是「算出实情」，亮不亮由 syncBad 按 1s 防抖决定（见 drawBadRegions 上方）
   var bad = state.status === 'playing' ? badRegions(auto) : [];
   state.badRegions = bad;
+
+  /* 步数按格记账（2026-10-29）：一格从「空 / 手标 × / 自动 × / 皇后」变成另一种，
+   * 就是一步。放在 render 里而不是各个动作里，是因为**棋盘变化只有这一条路**：
+   * 拖拽涂抹、单击、双击落子、清空、一键补齐最后都走到这儿，
+   * 连「放一只皇后带出来的一片自动 ×」也自然算进去了。
+   * 撤销 / 重做 / 还原记录点 / 判错作废走 renderQuiet()，它们不算步。 */
+  var flips = 0;
 
   for (var i = 0; i < n * n; i++) {
     var cell = view.cells[i];
@@ -93,8 +101,13 @@ export function render(anim) {
     cell.setAttribute('aria-label', label);
     cell.setAttribute('aria-selected', s === 'q' ? 'true' : 'false');
 
+    if (s !== prev) flips++;
     view.lastStates[i] = s;
   }
+
+  /* 记步：只在真变了、且不是「回到走过的位置」那几条路上才加。
+   * 换盘时 buildBoard 会把 lastStates 清成空串，所以装上的一盘一格都不记。 */
+  if (flips && !view.quietSteps) state.steps += flips;
 
   settleFade();
 
@@ -120,6 +133,19 @@ export function render(anim) {
     buzz([28, 46, 28]);
   }
   view.lastConflictCount = cf.count;
+}
+
+/* ---- 不记步数地画一遍 ----
+ * 撤销 / 重做 / 还原记录点 / 判错作废会改棋盘，但它们是「回到走过的位置」，
+ * 不该涨步数（口径见 core/state.js 的 state.steps）。
+ * 用计数器包一层而不是传参数：调用点散在 app/ 里，改参数要逐个签名跟着动。 */
+export function renderQuiet(anim) {
+  view.quietSteps++;
+  try {
+    render(anim);
+  } finally {
+    view.quietSteps--;
+  }
 }
 
 /* ---- 色块描边 ----

@@ -32,7 +32,7 @@ import { applyLook, closeLook, openLook } from './ui/panels/look.js';
 import { closeRecords, openRecords } from './ui/panels/records.js';
 import { showResult } from './ui/panels/result.js';
 import { openSlot, maybeOpenFromUrl, slotProbe } from './ui/panels/slot.js';
-import { render, updateStats } from './ui/render.js';
+import { render, renderQuiet, updateStats } from './ui/render.js';
 import { takeHashCode, tryLoadShare } from './ui/share.js';
 import { traceCells } from './ui/trace.js';
 import { checkLives, checkSteps, checkTimeout } from './ui/win.js';
@@ -95,7 +95,10 @@ function boot() {
     buildBoard(false);
     buildRegionBar();
     relayout();
-    render();
+    /* 读档回来这一画不算步数：棋盘上那些标记是**上一次**走出来的，存档里
+     * 已经记过它们了（state.steps 也跟着存档回来）。这里要是照常记账，
+     * 每刷新一次就等于白走几十步。 */
+    renderQuiet();
     /* 续玩的盘已经写满了标记：这一步直接淡好，
      * 别让它先整盘亮 0.5 秒再透下去（那不是「刚做的」，是「早就有的」）。 */
     applyFadeNow();
