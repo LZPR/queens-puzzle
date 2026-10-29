@@ -170,6 +170,8 @@ window.__QUEENS_DEBUG__ = {
   closeDiff: closeDiff,
   // 当前开着的浮层 id（null = 没开）。只给 tools/ 里的自动化测试用
   sheet: function () { return view.sheet; },
+  // 正在出题（棋盘只读）。只给 tools/ 里的自动化测试用：等「换盘换完了」得看这个
+  rolling: function () { return view.rolling; },
   // 挑战相关的探针，只给 tools/ 里的自动化测试用
   remaining: limitRemaining,
   checkTimeout: checkTimeout,
@@ -208,7 +210,7 @@ window.__QUEENS_DEBUG__ = {
   recordClear: records.clear,
   openRecords: openRecords,
   closeRecords: closeRecords,
-  // 每日挑战：今天的日期键、四挡规矩、哪几挡打完了、哪几挡锁着。
+  // 每日挑战：今天的日期键、五挡规矩（含今天抽到哪两样）、哪几挡打完了、哪几挡锁着。
   // 只给 tools/ 里的自动化测试用（正常游玩都走换一局面板与战绩页）
   daily: function () {
     var day = daily.dayKey();
@@ -217,10 +219,12 @@ window.__QUEENS_DEBUG__ = {
       var t = daily.DAILY_TIERS[i];
       out.done[t] = daily.isDone(day, t);
       out.unlocked[t] = daily.unlocked(day, t);
-      out[t] = daily.ruleOf(t);
+      out[t] = daily.ruleOf(t, day);
     }
     return out;
   },
+  /* 某天某挡的那组规矩（限时 / 限步 / 标错 / 跳过哪一项），纯函数可直接对表 */
+  dailyRuleOf: daily.ruleOf,
   dailyAll: daily.days,
   dailyMark: daily.mark,
   dailyClear: daily.clear,

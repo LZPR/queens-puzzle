@@ -385,9 +385,9 @@ export function retryGame() {
    遮罩挡得住鼠标，挡不住键盘。
    ========================================================== */
 export function newDaily(tier) {
-  var rule = ruleOf(tier);
-  if (!rule) return;
   var day = dayKey();
+  var rule = ruleOf(tier, day);
+  if (!rule) return;
   var band = DIFF_BANDS[tier];
 
   if (isOpen('result')) closeSheet('result', { force: true });
@@ -418,8 +418,13 @@ export function newDaily(tier) {
       got.board.seed, got.vibe, rulesFor(day, tier));
 
     sfx('new');
+    /* 播报今天真比的那两样（没抽到的那一项别念成「不限时」） */
+    var bits = [];
+    if (rule.limit) bits.push('限时 ' + limitLabel(rule.limit));
+    if (rule.steps) bits.push('限步 ' + rule.steps + ' 步');
+    if (rule.lives) bits.push('标错 ' + rule.lives + ' 条命');
     announce('今日挑战：' + band.name + ' ' + rule.size + '×' + rule.size +
-      '，限时 ' + limitLabel(rule.limit) + '，一天只有这一盘');
+      '，' + bits.join('、') + '，一天只有这一盘');
     if (rule.size >= 13 && taken > 320) {
       flashHint('这局生成用了 ' + (taken / 1000).toFixed(1) + ' 秒', true, 1400);
     }

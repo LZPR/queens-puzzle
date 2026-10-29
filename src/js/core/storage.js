@@ -108,7 +108,7 @@ export function doSave() {
       lostBy: state.lostBy || '',
       elapsed: Math.round(elapsedMs()),
       status: state.status,
-      /* 本局的三把锁（禁用提示 / 撤销 / 记录点）：每日挑战会把提示与记录点锁死，
+      /* 本局的三把锁（禁用提示 / 撤销 / 记录点）：每日挑战会把提示锁死（另两把放给你用），
        * 刷新回来还得是锁着的，所以它们跟着存档走，不复读 settings。 */
       noHint: !!state.noHint,
       noUndo: !!state.noUndo,

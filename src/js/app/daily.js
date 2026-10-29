@@ -42,9 +42,9 @@ export function seedOf(day, tier, attempt) {
 /** 出今天这一挡的盘：{ board, vibe }，出不了返回 null。
  *  同一个 (day, tier) 在任何设备上都得到同一副棋盘。 */
 export function buildDaily(tier, day) {
-  var rule = ruleOf(tier);
-  if (!rule || !window.QueensEngine) return null;
   var d = day || dayKey();
+  var rule = ruleOf(tier, d);
+  if (!rule || !window.QueensEngine) return null;
   var tries = ATTEMPTS[tier] || 6;
   var last = null;
   var hardest = null;

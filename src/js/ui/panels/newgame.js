@@ -6,9 +6,10 @@
  *   自定义 —— 棋盘大小、目标难度、挑战全都自己挑（原来的玩法，一个字没改）
  *   每日挑战 —— 一天一盘，只跟日期有关（见 core/daily.js / app/daily.js）：
  *                难度五挡，完成前一挡才解锁下一挡；棋盘固定该挡最大盘；
- *                限时按挡位 3 / 5 / 10 / 15 / 20 分钟，限步按挡位
- *                60 / 100 / 150 / 250 / 400 步；禁用提示、可以撤销、
- *                记录点可用、标错不惩罚。这些全锁着，改不了。
+ *                **限时 / 限步 / 标错惩罚里每天每挡只抽两样**（限时按挡位
+ *                3/5/10/15/20 分、限步按挡位 60/100/150/250/400 步、标错固定
+ *                3 条命），剩下一项这局不设限；禁用提示、可以撤销、记录点可用。
+ *                这些全锁着，改不了。
  *
  * 自定义那一路的三组（尺寸 / 难度 / 挑战）都只写 pending，点「换一局」才落地
  * ——中途改完不换局就等于没改（开了限时又反悔，也不用担心这局被计时追着跑）。
@@ -209,13 +210,13 @@ function tierLocked(tier) {
    ========================================================== */
 function applyMode() {
   if (mode === 'daily') {
-    var day = today();
-    pending.difficulty = pickTier(day);
-    var r = ruleOf(pending.difficulty);
+    var day0 = today();
+    pending.difficulty = pickTier(day0);
+    var r = ruleOf(pending.difficulty, day0);
     pending.size = r.size;
     pending.timeLimit = r.limit;
     pending.stepLimit = r.steps;
-    pending.lifeLimit = 0;
+    pending.lifeLimit = r.lives;
     pending.noHint = true;
     pending.noUndo = false;
     pending.noSnap = false;
@@ -360,16 +361,25 @@ export function challengeSummary() {
   return challengeBits().join(' · ');
 }
 
+/* 今天这一挡比哪两样：拼成「限时 3 分 · 60 步」这样一段话。
+ * 摘要、播报、按钮下方那行共用一处；没被抽到的那一项（值为 0）不出现。 */
+function dailyRuleBits(r) {
+  var bits = [];
+  if (!r) return bits;
+  if (r.limit) bits.push('限时 ' + Math.round(r.limit / 60000) + ' 分');
+  if (r.steps) bits.push(r.steps + ' 步');
+  if (r.lives) bits.push(r.lives + ' 条命');
+  return bits;
+}
+
 /* 折叠时标题右边那串摘要：一横看下来就知道这局加了什么规矩。
  * 每日挑战那几项写死，直接照着规矩说（别从 pending 推，pending 是给人改的）。 */
 function challengeSumText() {
   if (mode === 'daily') {
-    var r = ruleOf(pending.difficulty);
-    /* 每日挑战这几项是写死的，「限时 3 分钟」压成「3 分」——
-       标题放大之后这一行窄了，320 上才不至于截得只剩半句。 */
-    return r
-      ? '限时 ' + Math.round(r.limit / 60000) + ' 分 · ' + r.steps + ' 步 · 无提示'
-      : '由难度决定';
+    var r = ruleOf(pending.difficulty, today());
+    /* 只列今天真比的那两样 + 恒定项。「限时 20 分 · 400 步 · 无提示」是这一行最长的形态，
+       标题放大之后它窄了，320 上才不至于截得只剩半句。 */
+    return r ? dailyRuleBits(r).concat(['无提示']).join(' · ') : '由难度决定';
   }
   var bits = [pending.timeLimit ? '限时 ' + limitLabel(pending.timeLimit) : '不限时'];
   if (pending.stepLimit) bits.push('限步 ' + stepLimitLabel(pending.stepLimit));
@@ -450,7 +460,7 @@ export function syncNew() {
   if (daily && DAILY_TIERS.indexOf(pending.difficulty) < 0) pending.difficulty = pickTier(day);
   var diff = pending.difficulty;
   var band = diff && diff !== 'any' ? DIFF_BANDS[diff] : null;
-  var rule = daily ? ruleOf(diff) : null;
+  var rule = daily ? ruleOf(diff, day) : null;
   var rng = rangeOf(diff);
   var lo = rng[0], hi = rng[1];
 
@@ -530,7 +540,9 @@ export function syncNew() {
     lbtns[l].classList.toggle('is-locked', daily);
   }
   limitHint.textContent = daily
-    ? '每日挑战固定限时 ' + limitLabel(lim) + ' · 超时就判负，可以重试这一局'
+    ? (rule.skip === 'time'
+        ? '今日不比限时：这局不限时，慢推就行'
+        : '每日挑战固定限时 ' + limitLabel(lim) + ' · 超时就判负，可以重试这一局')
     : (lim !== applied
         ? '换一局后生效：' + (lim ? '限时 ' + limitLabel(lim) : '不限时')
         : (lim ? '本局限时 ' + limitLabel(lim) + '，超时判负，可以重试这一局'
@@ -548,7 +560,9 @@ export function syncNew() {
     sbtns[s].classList.toggle('is-locked', daily);
   }
   stepHint.textContent = daily
-    ? '每日挑战固定限步 ' + stepLimitLabel(sl) + ' · 用完判负，可以重试这一局'
+    ? (rule.skip === 'steps'
+        ? '今日不比步数：这局不限步数'
+        : '每日挑战固定限步 ' + stepLimitLabel(sl) + ' · 用完判负，可以重试这一局')
     : (sl !== slApplied
         ? '换一局后生效：' + stepLimitLabel(sl)
         : (sl ? '本局限步 ' + stepLimitLabel(sl) + '，用完判负，可以重试这一局'
@@ -566,7 +580,9 @@ export function syncNew() {
     lbts[q].classList.toggle('is-locked', daily);
   }
   lifeHint.textContent = daily
-    ? '每日挑战不惩罚标错：放错的皇后会亮冲突线，自己擦掉就行'
+    ? (rule.skip === 'lives'
+        ? '今日不比标错：放错不扣命，亮起冲突线自己擦掉'
+        : '每日挑战固定扣 ' + lv2 + ' 条，放错一次扣一条')
     : (lv2 !== lvApplied
         ? '换一局后生效：' + (lv2 ? lifeLabel(lv2) : '不惩罚')
         : (lv2 ? '本局 ' + lifeLabel(lv2) + '，放错一次扣一条，可以重试这一局'
@@ -608,13 +624,13 @@ export function syncShuffleRow() {
     var day = today();
     var tier = pending.difficulty;
     var band = DIFF_BANDS[tier];
-    var r = ruleOf(tier);
+    var r = ruleOf(tier, day);
     var done = isDone(day, tier);
     btnShuffle.textContent = done ? '再打一遍' : '开始今日挑战';
     btnShuffle.classList.toggle('is-pending', !done);
     shuffleHint.classList.toggle('is-pending', false);
     shuffleHint.textContent = '今日 ' + band.name + ' ' + r.size + '×' + r.size +
-      ' · 限时 ' + Math.round(r.limit / 60000) + ' 分 · ' + r.steps + ' 步' +
+      ' · ' + dailyRuleBits(r).join(' · ') +
       (done ? ' · 今天打过了，只刷新时间' : '');
     return;
   }
@@ -781,12 +797,15 @@ export function mount(host) {
     if (mode === 'daily') {
       if (lv === 'any' || tierLocked(lv)) return;   // 没解锁的挡位点不动（按钮本来就是灰的）
       pending.difficulty = lv;
-      var r = ruleOf(lv);
+      var r = ruleOf(lv, today());
       pending.size = r.size;
+      /* 换挡就换一组规矩：抽到哪两样、步数与命数都跟着这一挡走 */
       pending.timeLimit = r.limit;
+      pending.stepLimit = r.steps;
+      pending.lifeLimit = r.lives;
       syncNew();
       announce('今日挑战：' + DIFF_BANDS[lv].name + ' ' + r.size + '×' + r.size +
-        '，限时 ' + limitLabel(r.limit));
+        '，' + dailyRuleBits(r).join(' · '));
       return;
     }
 
@@ -833,7 +852,7 @@ export function mount(host) {
     if (mode === 'daily') {
       var day = today();
       var tier = pending.difficulty;
-      if (!tier || !ruleOf(tier) || !unlocked(day, tier)) return;
+      if (!tier || !ruleOf(tier, day) || !unlocked(day, tier)) return;
       closeNew();
       newDaily(tier);
       return;

@@ -133,6 +133,19 @@ const game = () => page.evaluate(() => {
 
 const st = () => page.evaluate(() => __QUEENS_DEBUG__.daily());
 
+/* 今天的抽签：限时 / 限步 / 标错三样里每天每挡抽两样，抽哪两样只跟「日期 + 档位」有关。
+ * 所以下面的断言一律对着 dailyRuleOf() 现算——写死「3 分 / 60 步」的写法第二天就会红。 */
+const ruleOfTier = t => page.evaluate(
+  tier => __QUEENS_DEBUG__.dailyRuleOf(tier, __QUEENS_DEBUG__.daily().day), t);
+const limitTxt = ms => Math.round(ms / 60000) + ' 分';
+const expectUi = r => ({
+  limitOn: [r.limit ? limitTxt(r.limit) : '不限'],
+  stepOn: [r.steps ? r.steps + ' 步' : '不限'],
+  lifeOn: [r.lives ? r.lives + ' 条' : '不惩罚'],
+  bits: [r.limit ? '限时 ' + limitTxt(r.limit) : '', r.steps ? r.steps + ' 步' : '',
+    r.lives ? r.lives + ' 条命' : ''].filter(Boolean)
+});
+
 await page.goto(URL, { waitUntil: 'networkidle0' });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: 'networkidle0' });
@@ -182,18 +195,31 @@ ok('后面四档今天还锁着',
 ok('棋盘固定 5×5（容易的最大盘）', p.sizeVal === '5', p.sizeVal);
 ok('步进器按不动', p.sizeMinus && p.sizePlus);
 ok('常用尺寸那一行收起', p.quickHidden);
-ok('限时固定 3 分', p.limitOn.join() === '3 分', p.limitOn);
+/* 三排挡位：抽到的那两样落在这一挡的值上，没抽到的那排停在「不限 / 不惩罚」。
+ * 三样一个都不许落空、也不许三样全上——正好两样。 */
+const easyRule = await ruleOfTier('easy');
+const eUI = expectUi(easyRule);
+ok('今天容易这一挡正好比两样',
+  [easyRule.limit, easyRule.steps, easyRule.lives].filter(Boolean).length === 2, easyRule);
+ok('限时那排跟着抽签（' + eUI.limitOn.join() + '）',
+  p.limitOn.join() === eUI.limitOn.join(), p.limitOn);
 ok('限时挡位全灰', p.limitAllDisabled);
-ok('步数固定 60 步', p.stepOn.join() === '60 步', p.stepOn);
-ok('标错固定「不惩罚」', p.lifeOn.join() === '不惩罚', p.lifeOn);
+ok('步数那排跟着抽签（' + eUI.stepOn.join() + '）',
+  p.stepOn.join() === eUI.stepOn.join(), p.stepOn);
+ok('标错那排跟着抽签（' + eUI.lifeOn.join() + '）',
+  p.lifeOn.join() === eUI.lifeOn.join(), p.lifeOn);
 ok('标错挡位全灰', p.lifeAllDisabled);
 ok('禁用提示开 / 撤销关 / 记录点可用',
   p.noHint === 'true' && p.noUndo === 'false' && p.noSnap === 'false',
   `${p.noHint}/${p.noUndo}/${p.noSnap}`);
 ok('三颗开关都锁着', p.switchesLocked);
-ok('说明写明「固定限时 3 分钟」', /固定限时 3 分钟/.test(p.limitHint), p.limitHint);
-ok('说明写明固定限步 60 步', /固定限步 60 步/.test(p.stepHint), p.stepHint);
-ok('说明写明不惩罚标错', /不惩罚/.test(p.lifeHint), p.lifeHint);
+ok('每排说明都对着今天的抽签说话',
+  (easyRule.skip === 'time' ? /不比限时/.test(p.limitHint) : /固定限时/.test(p.limitHint)) &&
+  (easyRule.skip === 'steps' ? /不比步数/.test(p.stepHint) : /固定限步/.test(p.stepHint)) &&
+  (easyRule.skip === 'lives' ? /不比标错/.test(p.lifeHint) : /固定扣 3 条/.test(p.lifeHint)),
+  [p.limitHint, p.stepHint, p.lifeHint]);
+ok('摘要只列今天真比的两样',
+  p.sum === eUI.bits.concat(['无提示']).join(' · '), p.sum);
 ok('难度那行说清解锁关系', /解锁/.test(p.diffHint), p.diffHint);
 ok('尺寸那行说是最大盘', /5×5/.test(p.sizeHint), p.sizeHint);
 ok('按钮变成「开始今日挑战」', p.shuffle === '开始今日挑战', p.shuffle);
@@ -215,10 +241,11 @@ await waitFreshBoard(null);
 let g = await game();
 const today = await st();
 ok('装上 5×5', g.n === 5, g.n);
-ok('限时 3 分钟', g.limit === 180000, g.limit);
-ok('限步 60 / 标错不惩罚 / 没有命',
-  g.stepLimit === 60 && g.lifeLimit === 0 && g.lives === 0,
-  `${g.stepLimit}/${g.lifeLimit}/${g.lives}`);
+ok('限时按抽签落地', g.limit === easyRule.limit, `${g.limit}/${easyRule.limit}`);
+ok('限步按抽签落地', g.stepLimit === easyRule.steps, `${g.stepLimit}/${easyRule.steps}`);
+ok('命数按抽签落地（抽到才是 3 条）',
+  g.lifeLimit === easyRule.lives && g.lives === easyRule.lives,
+  `${g.lifeLimit}/${g.lives}/${easyRule.lives}`);
 ok('提示锁 / 记录点可用 / 撤销开着', g.hintDisabled && !g.snapLocked && !g.undoLocked,
   `${g.hintDisabled}/${g.snapLocked}/${g.undoLocked}`);
 ok('这一局记着是每日挑战', g.daily && g.daily.day === today.day && g.daily.tier === 'easy',
@@ -424,9 +451,12 @@ await sleep(320);
 p = await panel();
 ok('面板五挡都能点', p.diffs.filter(d => d.lv !== 'any').every(d => !d.dis), p.diffs);
 ok('默认停在还没完成的「极难」', p.diffs.some(d => d.lv === 'extreme' && d.on), p.diffs);
-ok('极难 = 16×16 + 20 分钟 + 400 步',
-  p.sizeVal === '16' && p.limitOn.join() === '20 分' && p.stepOn.join() === '400 步',
-  p.sizeVal + '/' + p.limitOn + '/' + p.stepOn);
+const extremeRule = await ruleOfTier('extreme');
+const xUI = expectUi(extremeRule);
+ok('极难 = 16×16 + 今天抽到的两项',
+  p.sizeVal === '16' && p.limitOn.join() === xUI.limitOn.join() &&
+  p.stepOn.join() === xUI.stepOn.join() && p.lifeOn.join() === xUI.lifeOn.join(),
+  [p.sizeVal, p.limitOn, p.stepOn, p.lifeOn].join('/'));
 ok('面板说今天已完成', /今日已完成/.test(p.note), p.note);
 /* 停在还没打完的「极难」上：这一天虽然已经算完成，但这一挡还是第一次打 */
 ok('按钮是「开始今日挑战」（极难还没打过）', p.shuffle === '开始今日挑战', p.shuffle);
@@ -434,6 +464,7 @@ await page.screenshot({ path: `${SHOTS}/daily-6-late.png` });
 await closeSheet();
 
 console.log('\n--- 9. 刷新：还是同一局、锁还在 ---');
+const midRule = await ruleOfTier('mid');
 await openSheet();
 await page.evaluate(() => { document.querySelector('#diffOpts [data-level="mid"]').click(); });
 await sleep(220);
@@ -451,65 +482,151 @@ const back = await game();
 ok('刷新后还是 8×8 的每日挑战',
   back.n === 8 && !!back.daily && back.daily.tier === 'mid', JSON.stringify(back.daily));
 ok('盘面没变', back.regions === beforeReload.regions);
-ok('限时 / 限步与两把锁都还在',
-  back.limit === 300000 && back.stepLimit === 100 &&
+ok('刷新后规矩按「日期 + 档位」重算，一项不差',
+  back.limit === midRule.limit && back.stepLimit === midRule.steps &&
   back.noHint === true && back.noUndo === false && back.noSnap === false,
   `${back.limit}/${back.stepLimit}/${back.noHint}/${back.noUndo}/${back.noSnap}`);
 
-console.log('\n--- 10. 重试这一局：还是同一盘，仍记在每日里 ---');
-await page.evaluate(() => {
-  const d = __QUEENS_DEBUG__;
-  d.state.elapsed = 400000;   // 8×8 中等 = 5 分钟，超时
-  d.state.runningSince = 0;
-});
-await sleep(900);
-const lost = await page.evaluate(() => ({
-  status: __QUEENS_DEBUG__.state.status,
-  open: !document.getElementById('result').hidden,
-  title: document.getElementById('resultTitle').textContent.trim()
-}));
-ok('超时判负', lost.status === 'lost' && lost.open && lost.title === '时间到', JSON.stringify(lost));
-await jsClick('#btnAgain');
-await sleep(800);
-const retry = await game();
-ok('重试仍是每日挑战（day / tier 没丢）',
-  !!retry.daily && retry.daily.tier === 'mid', JSON.stringify(retry.daily));
-ok('重试还是同一盘', retry.regions === beforeReload.regions);
-ok('限时重新给满', retry.limit === 300000);
+console.log('\n--- 10. 超时判负 / 重试（挑一挡今天真比限时的来测） ---');
+/* 五挡各抽到哪两样是日期定的，判负测试得先找到「今天比这一项」的档位。
+ * 每项至少会出现在三挡里（3 选 2），五个档位全躲开的概率是 (1/3)^5 ≈ 0.4%。 */
+const allRules = [];
+for (const t of ['easy', 'mid', 'advanced', 'hard', 'extreme']) allRules.push(await ruleOfTier(t));
+const timeRule = allRules.find(r => r.limit > 0);
+const stepRule = allRules.find(r => r.steps > 0);
 
-console.log('\n--- 11. 步数用尽：跟限时一样判负 ---');
-/* 每日挑战的步数限制是跟着难度走的（中等 = 100 步），判负规矩跟自定义挑战一条：
- * 数到上限还没解开就封盘。这里把计数器挪到「还差一步」，再真点一格。 */
-await page.evaluate(() => {
-  const d = __QUEENS_DEBUG__;
-  d.state.steps = d.state.stepLimit - 1;
-  document.querySelector('.cell').click();
+/* 从面板换到某一挡的每日挑战：换盘要等出题跑完（view.rolling 复位 + 面板收起） */
+async function startTier(tier) {
+  await openSheet();
+  const onDaily = await page.evaluate(() =>
+    (document.querySelector('.mtab.is-on') || {}).id === 'tabModeDaily');
+  if (!onDaily) { await jsClick('#tabModeDaily'); await sleep(320); }
+  await page.evaluate(t => {
+    const b = document.querySelector('#diffOpts [data-level="' + t + '"]');
+    if (b) b.click();
+  }, tier);
+  await sleep(240);
+  await jsClick('#btnShuffle');
+  await page.waitForFunction(t => {
+    const d = __QUEENS_DEBUG__;
+    return document.getElementById('newWrap').hidden && d.rolling() === false &&
+      !!d.state.daily && d.state.daily.tier === t && d.state.status === 'playing' &&
+      d.state.regions.length > 0;
+  }, { timeout: 40000 }, tier);
+  await sleep(320);
+  return await game();
+}
+
+if (!timeRule) {
+  console.log('  今天五挡都没抽到限时（跳过超时那节）：' + allRules.map(r => r.skip).join());
+} else {
+  const tb = await startTier(timeRule.tier);
+  ok('挑中的这一挡今天真比限时：' + timeRule.tier + ' ' + limitTxt(timeRule.limit),
+    tb.limit === timeRule.limit, `${tb.limit}/${timeRule.limit}`);
+  await page.evaluate(ms => {
+    const d = __QUEENS_DEBUG__;
+    d.state.elapsed = ms + 5000;   // 越过这一挡的限时
+    d.state.runningSince = 0;
+  }, timeRule.limit);
+  await sleep(900);
+  const lost = await page.evaluate(() => ({
+    status: __QUEENS_DEBUG__.state.status,
+    lostBy: __QUEENS_DEBUG__.state.lostBy,
+    open: !document.getElementById('result').hidden,
+    title: document.getElementById('resultTitle').textContent.trim()
+  }));
+  ok('超时判负', lost.status === 'lost' && lost.lostBy === 'time' && lost.open &&
+    lost.title === '时间到', JSON.stringify(lost));
+  await jsClick('#btnAgain');
+  await sleep(800);
+  const retry = await game();
+  ok('重试仍是每日挑战（day / tier 没丢）',
+    !!retry.daily && retry.daily.tier === timeRule.tier, JSON.stringify(retry.daily));
+  ok('重试还是同一盘', retry.regions === tb.regions);
+  ok('限时重新给满、另外两项照旧',
+    retry.limit === timeRule.limit && retry.stepLimit === timeRule.steps &&
+    retry.lifeLimit === timeRule.lives,
+    `${retry.limit}/${retry.stepLimit}/${retry.lifeLimit}`);
+  await page.screenshot({ path: `${SHOTS}/daily-7-time-retry.png` });
+}
+
+console.log('\n--- 11. 步数用尽（挑一挡今天真比限步的来测） ---');
+if (!stepRule) {
+  console.log('  今天五挡都没抽到限步（跳过这一节）：' + allRules.map(r => r.skip).join());
+} else {
+  const sb = await startTier(stepRule.tier);
+  ok('挑中的这一挡今天真比限步：' + stepRule.tier + ' ' + stepRule.steps + ' 步',
+    sb.stepLimit === stepRule.steps, `${sb.stepLimit}/${stepRule.steps}`);
+  /* 把计数器挪到「还差一步」，再真点一格：判负规矩跟自定义挑战一条 */
+  await page.evaluate(() => {
+    const d = __QUEENS_DEBUG__;
+    d.state.steps = d.state.stepLimit - 1;
+    document.querySelector('.cell').click();
+  });
+  await sleep(900);
+  const overSteps = await page.evaluate(() => ({
+    status: __QUEENS_DEBUG__.state.status,
+    lostBy: __QUEENS_DEBUG__.state.lostBy,
+    steps: __QUEENS_DEBUG__.state.steps,
+    open: !document.getElementById('result').hidden,
+    title: document.getElementById('resultTitle').textContent.trim(),
+    timeLbl: document.getElementById('resTimeLbl').textContent.trim(),
+    time: document.getElementById('resTime').textContent.trim()
+  }));
+  ok('第 ' + stepRule.steps + ' 步用完就判负',
+    overSteps.status === 'lost' && overSteps.lostBy === 'steps' &&
+    overSteps.steps === stepRule.steps,
+    `${overSteps.status}/${overSteps.lostBy}/${overSteps.steps}`);
+  ok('结果层是「步数用尽」', overSteps.open && overSteps.title === '步数用尽', overSteps.title);
+  ok('中间那格写「限步 ' + stepRule.steps + '」',
+    overSteps.timeLbl === '限步' && overSteps.time === String(stepRule.steps),
+    `${overSteps.timeLbl}=${overSteps.time}`);
+  await page.screenshot({ path: `${SHOTS}/daily-8-steps-lost.png` });
+  await jsClick('#btnAgain');
+  await sleep(800);
+  const retrySteps = await game();
+  const retryStepsNow = await page.evaluate(() => __QUEENS_DEBUG__.state.steps);
+  ok('重试回到每日挑战、步数归零、限步还在',
+    !!retrySteps.daily && retrySteps.daily.tier === stepRule.tier &&
+    retryStepsNow === 0 && retrySteps.stepLimit === stepRule.steps,
+    `${JSON.stringify(retrySteps.daily)}/${retryStepsNow}/${retrySteps.stepLimit}`);
+}
+
+console.log('\n--- 12. 三样抽两样：纯函数，只认日期 + 档位 ---');
+/* 抽样 150 天 × 5 挡直接对表：每挡必须正好两样、值必须落在那张挡位表上、
+ * 同一输入两次调用结果一致（刷新不换规矩），三种组合都得出现且大致均匀。 */
+const matrix = await page.evaluate(() => {
+  const f = __QUEENS_DEBUG__.dailyRuleOf;
+  const tiers = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
+  const MS = { easy: 180000, mid: 300000, advanced: 600000, hard: 900000, extreme: 1200000 };
+  const ST = { easy: 60, mid: 100, advanced: 150, hard: 250, extreme: 400 };
+  const pad = n => (n < 10 ? '0' : '') + n;
+  const combos = {}, bad = [];
+  for (let i = 0; i < 150; i++) {
+    const dt = new Date(2026, 0, 1 + i);
+    const key = dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
+    for (const t of tiers) {
+      const a = f(t, key), b = f(t, key);
+      if (JSON.stringify(a) !== JSON.stringify(b)) bad.push('不稳定 ' + key + '/' + t);
+      if ([a.limit, a.steps, a.lives].filter(Boolean).length !== 2) {
+        bad.push('不是两样 ' + key + '/' + t + ' ' + JSON.stringify(a));
+      }
+      if (a.day !== key) bad.push('day 没带上 ' + key + '/' + t);
+      if (a.limit && a.limit !== MS[t]) bad.push('限时对不上 ' + key + '/' + t);
+      if (a.steps && a.steps !== ST[t]) bad.push('限步对不上 ' + key + '/' + t);
+      if (a.lives && a.lives !== 3) bad.push('命数不是 3 ' + key + '/' + t);
+      if (a.skip !== (a.limit ? (a.steps ? 'lives' : 'steps') : 'time')) {
+        bad.push('skip 对不上 ' + key + '/' + t);
+      }
+      combos[a.skip] = (combos[a.skip] || 0) + 1;
+    }
+  }
+  return { bad: bad.slice(0, 6), badCount: bad.length, combos };
 });
-await sleep(900);
-const overSteps = await page.evaluate(() => ({
-  status: __QUEENS_DEBUG__.state.status,
-  lostBy: __QUEENS_DEBUG__.state.lostBy,
-  steps: __QUEENS_DEBUG__.state.steps,
-  open: !document.getElementById('result').hidden,
-  title: document.getElementById('resultTitle').textContent.trim(),
-  timeLbl: document.getElementById('resTimeLbl').textContent.trim(),
-  time: document.getElementById('resTime').textContent.trim()
-}));
-ok('第 100 步用完就判负',
-  overSteps.status === 'lost' && overSteps.lostBy === 'steps' && overSteps.steps === 100,
-  `${overSteps.status}/${overSteps.lostBy}/${overSteps.steps}`);
-ok('结果层是「步数用尽」', overSteps.open && overSteps.title === '步数用尽', overSteps.title);
-ok('中间那格写「限步 100」', overSteps.timeLbl === '限步' && overSteps.time === '100',
-  `${overSteps.timeLbl}=${overSteps.time}`);
-await page.screenshot({ path: `${SHOTS}/daily-7-steps-lost.png` });
-await jsClick('#btnAgain');
-await sleep(800);
-const retrySteps = await game();
-const retryStepsNow = await page.evaluate(() => __QUEENS_DEBUG__.state.steps);
-ok('重试回到每日挑战、步数归零、限步还在',
-  !!retrySteps.daily && retrySteps.daily.tier === 'mid' &&
-  retryStepsNow === 0 && retrySteps.stepLimit === 100,
-  `${JSON.stringify(retrySteps.daily)}/${retryStepsNow}/${retrySteps.stepLimit}`);
+ok('150 天 × 5 挡全是「三选二」，值也对得上挡位表', matrix.badCount === 0, matrix.bad);
+ok('三种组合都出现、分量大致均匀（各约 250）',
+  Object.keys(matrix.combos).length === 3 &&
+  Object.values(matrix.combos).every(n => n > 150 && n < 350), matrix.combos);
 
 console.log('\n--- console ---');
 console.log(errs.length ? errs.join('\n') : '(none)');

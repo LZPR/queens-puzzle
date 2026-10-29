@@ -11,9 +11,13 @@
  *
  * 五挡的规矩（玩家改不了，见 requirement）：
  *   棋盘 = 这一挡能开的最大盘（借 DIFF_BANDS 的 hi，别另写一份尺寸）
- *   限时 = 3 / 5 / 10 / 15 / 20 分钟
- *   限步 = 60 / 100 / 150 / 250 / 400 步（跟限时同一条链，一挡比一挡宽）
- *   禁用提示 · 可以撤销 · 记录点可用 · 标错不惩罚
+ *   **限时 / 限步 / 标错惩罚三样里，每天每挡只抽两样**，剩下那样这一局不算：
+ *     限时 = 3 / 5 / 10 / 15 / 20 分钟（被抽到时）
+ *     限步 = 60 / 100 / 150 / 250 / 400 步（被抽到时）
+ *     标错 = 固定 3 条命（被抽到时）；没抽到就是「放错不扣命」
+ *   抽哪两样只认「日期 + 档位」，跟棋盘一个道理：同一挡今天刷新多少回都一样，
+ *   换一天（或换一挡）才可能换组合 —— 见 skipOf()。
+ *   恒定项：禁用提示 · 可以撤销 · 记录点可用
  *   完成任意一挡就算完成今日挑战（五挡是同一天里可选的五个尺寸，不是五道关卡）；
  *   解锁链照旧，完成前一挡才开下一挡。
  *
@@ -24,6 +28,12 @@ import { DIFF_BANDS, STORE_DAILY } from './config.js';
 
 /** 五挡，顺序就是解锁顺序。跟 DIFF_BANDS 的键是同一套（难度 v3 起多了「较难」）。 */
 export var DAILY_TIERS = ['easy', 'mid', 'advanced', 'hard', 'extreme'];
+
+/** 每日挑战写死的命数：标错惩罚被抽到时固定 3 条。 */
+export var DAILY_LIVES = 3;
+
+/** 三项挑战规矩。每天每挡抽两项，剩下一项这一局不设限。 */
+export var DAILY_RULES = ['time', 'steps', 'lives'];
 
 /* 每挡给多少步：跟限时同一套节奏（3/5/10/15/20 分钟 → 60/100/150/250/400 步），
  * 数值取自 config.js 的 STEP_OPTIONS（挑挡位时那排按钮就是这几个数）——
@@ -62,29 +72,52 @@ function validKey(key) {
 /* ==========================================================
    规矩
    ========================================================== */
-/** 某一挡的规矩：棋盘固定这一档能开的最大盘，限时与限步都按档位。 */
-export function ruleOf(tier) {
+/* FNV-1a 32 位。跟 app/daily.js 里出棋盘种子那支同款，但换了盐
+ * （'queens-daily-rules/'）：这样「今天抽掉哪一项」跟「今天出哪张盘」互不相关，
+ * 不会出现「跳过限时的日子总是那几张盘」。 */
+function hash32(str) {
+  var h = 0x811c9dc5;
+  for (var i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/** 今天这一挡**不比**哪一项：'time' / 'steps' / 'lives'（三选一，另两项才算）。
+ *  纯函数，只认「日期 + 档位」——同一挡今天刷新多少回都是同一组规矩，
+ *  跟棋盘同一个道理；换一天、换一挡才可能换组合。别改成 Math.random。 */
+export function skipOf(day, tier) {
+  return DAILY_RULES[hash32('queens-daily-rules/' + day + '/' + tier) % DAILY_RULES.length];
+}
+
+/** 某一挡的规矩：棋盘固定这一档能开的最大盘；限时 / 限步 / 标错里抽两样，
+ *  没抽到的那一项给 0（不限 / 不惩罚）。day 省略就是今天。 */
+export function ruleOf(tier, day) {
   var b = DIFF_BANDS[tier];
   if (!b) return null;
+  var d = day || dayKey();
+  var skip = skipOf(d, tier);
   return {
-    tier: tier, size: b.hi,
-    limit: TIER_MS[tier] || 0,
-    steps: TIER_STEPS[tier] || 0
+    tier: tier, day: d, size: b.hi, skip: skip,
+    limit: skip === 'time' ? 0 : (TIER_MS[tier] || 0),
+    steps: skip === 'steps' ? 0 : (TIER_STEPS[tier] || 0),
+    lives: skip === 'lives' ? 0 : DAILY_LIVES
   };
 }
 
 /** 交给 app/puzzle.js 的 applyBoard 的那一包「本局规矩」。
  *  day 一起带上：战绩与日历都认这个键（见 core/records.js 的 dy / dt）。 */
 export function rulesFor(day, tier) {
-  var r = ruleOf(tier);
+  var r = ruleOf(tier, day);
   if (!r) return null;
   return {
     timeLimit: r.limit,
     stepLimit: r.steps,
-    lifeLimit: 0,        // 标错不惩罚：放错的皇后亮冲突线，自己擦掉就行
+    lifeLimit: r.lives,
     noHint: true,
     noUndo: false,
-    noSnap: false,       // 记录点可用（只有「禁用提示」这一把锁了）
+    noSnap: false,
     daily: { day: day, tier: tier }
   };
 }
