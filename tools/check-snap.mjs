@@ -41,7 +41,7 @@ await page.goto(URL, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__QUEENS_DEBUG__ && __QUEENS_DEBUG__.state.regions, { timeout: 20000 });
 await sleep(600);
 // 自动打叉会往棋盘上铺 ×，测试里只关心自己点的那些
-await page.evaluate(() => { __QUEENS_DEBUG__.settings.autoMark = false; __QUEENS_DEBUG__.render(); });
+await page.evaluate(() => { __QUEENS_DEBUG__.state.autoMark = false; __QUEENS_DEBUG__.render(); });
 await sleep(200);
 
 const D = fn => page.evaluate(fn);
@@ -98,7 +98,7 @@ async function shuffle() {
     return st.seed !== s && st.vibe && document.getElementById('newWrap').hidden;
   }, { timeout: 40000 }, seed);
   await sleep(300);
-  await D(() => { __QUEENS_DEBUG__.settings.autoMark = false; __QUEENS_DEBUG__.render(); });
+  await D(() => { __QUEENS_DEBUG__.state.autoMark = false; __QUEENS_DEBUG__.render(); });
   await sleep(150);
 }
 
@@ -248,7 +248,7 @@ await sleep(400);   // 等 160ms 防抖写盘
 await page.reload({ waitUntil: 'load' });
 await page.waitForFunction(() => window.__QUEENS_DEBUG__ && __QUEENS_DEBUG__.state.regions, { timeout: 20000 });
 await sleep(600);
-await D(() => { __QUEENS_DEBUG__.settings.autoMark = false; __QUEENS_DEBUG__.render(); });
+await D(() => { __QUEENS_DEBUG__.state.autoMark = false; __QUEENS_DEBUG__.render(); });
 const reloaded = await snap();
 const reloadedBtn = await btn();
 ok('刷新回来还认得那一刻',

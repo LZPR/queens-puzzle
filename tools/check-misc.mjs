@@ -1,5 +1,5 @@
 /* ============================================================================
- * 杂项：设置面板只剩一列开关 / 换一局面板 / 分享搬到信息页且框里无滚动条 /
+ * 杂项：设置面板只剩一列开关（8 颗）/ 换一局面板（挑战组 6 颗开关）/ 分享搬到信息页且框里无滚动条 /
  *       淡化 × 默认关 / 拖动对齐与逐格震动 / 唯一位置提示的强度 /
  *       结果层的「重来这局」
  *
@@ -55,7 +55,7 @@ async function boot(fresh) {
   await sleep(500);
 }
 
-// ---------- 1. 设置面板：只剩一列开关 / 不折叠 / 无滚动条 ----------
+// ---------- 1. 设置面板：只剩一列开关（8 颗）/ 不折叠 / 无滚动条 ----------
 await boot(true);
 
 const sheet = await page.evaluate(() => {
@@ -78,8 +78,8 @@ const sheet = await page.evaluate(() => {
     settingsFade: __QUEENS_DEBUG__.settings.fadeMark
   };
 });
-check('设置面板是 9 个开关，且全部摊开',
-  sheet.open && sheet.total === 9 && sheet.visible === 9, `${sheet.visible}/${sheet.total}`);
+check('设置面板是 8 个开关，且全部摊开',
+  sheet.open && sheet.total === 8 && sheet.visible === 8, `${sheet.visible}/${sheet.total}`);
 check('设置面板不再有「显示更多选项」', sheet.moreBtn === false);
 check('分享已经不在设置面板里', sheet.shareInSettings === false);
 check('淡化 × 默认关闭', sheet.fadeMark === 'false' && sheet.settingsFade === false);
@@ -113,7 +113,7 @@ const ng = await page.evaluate(() => {
 });
 check('顶栏「新一局」打开的是换一局面板', ng.open);
 check('尺寸 / 难度 / 挑战都在这一层',
-  ng.stepper && ng.quick >= 5 && ng.diff === 6 && ng.limit === 6 && ng.step === 6 && ng.challengeSw === 3,
+  ng.stepper && ng.quick >= 5 && ng.diff === 6 && ng.limit === 6 && ng.step === 6 && ng.challengeSw === 6,
   ng);
 check('「换一局」在挑战组的下面', ng.shuffleAfterChallenge === true);
 check('换一局面板里没有分享', ng.share === false);
@@ -216,7 +216,7 @@ check('关掉对齐后可以斜着涂',
 // ---------- 4. 唯一位置提示的视觉强度 ----------
 const forced = await page.evaluate(() => {
   __QUEENS_DEBUG__.settings.alignDrag = true;
-  __QUEENS_DEBUG__.settings.autoMark = true;
+  __QUEENS_DEBUG__.state.autoMark = true;
   const d = __QUEENS_DEBUG__, n = d.state.size;
   const sol = Array.from(d.state.solution, (c, r) => r * n + c);
   d.state.marks.fill(0);

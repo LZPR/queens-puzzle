@@ -147,17 +147,26 @@ export function lifeLabel(n) {
   return n ? n + ' 条命' : '不惩罚';
 }
 
+/* 挑战里的三个「辅助」（自动打 × / 唯一位置提示 / 一键补齐）：
+ * 它们是**这一局的规矩**（state.autoMark 等），这里这几项只是「自定义模式
+ * 下一次开新局照抄什么」的默认值。每日挑战按挡位写死，不读这里。
+ * 三样默认都开着——出厂那一局是「有辅助」的完整形态。 */
 export var DEFAULT_SETTINGS = {
   size: 8,
   difficulty: 'any',
   autoMark: true,
   conflict: true,
   forced: true,
+  autoFill: true,
   sound: true,
   haptics: true,
   /* 拖动标 × 的落点方式：开着按行列对齐（锁一行 / 一列，见 events.js），
    * 关掉就跟着手指走，想斜着涂也随便。 */
   alignDrag: true,
+  /* 拖拽时只涂与起点同色的格子：开着时划出起点所在的那一块颜色就停手，
+   * 免得一路拖过去把隔壁色块也标上（见 events.js 的 paintOne）。
+   * 默认关着——开着它，「一行一路划过去」这种用法就只能涂到色块边界。 */
+  dragSameColor: false,
   // 挑战（即时生效，也跟着存盘）
   timeLimit: 0,     // 本局限时（毫秒），0 = 不限时
   stepLimit: 0,     // 本局步数限制（0 = 不限），用完还没解开就算输

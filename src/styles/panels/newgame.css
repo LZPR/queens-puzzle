@@ -6,7 +6,9 @@
 
    **这一页的行距是按「390×844 一屏装得下」量出来的**：动这里的 padding / margin
    之前先量一遍 `#newSheet` 的 scrollHeight，别把「换一局」顶出屏幕。
-   挑战组能折叠就是为这件事：摊开时它有三排挡位 + 三颗开关，收起时只剩一行。 */
+   挑战组能折叠就是为这件事：摊开时它有三排挡位 + 六颗开关，收起时只剩一行。
+   摊开 + 每日挑战仍然装不下（2026-10-29 起六颗开关），所以底部那颗按钮改成
+   `position: sticky` 粘在下沿——超出来的那点内容可以滚，主操作始终在视野里。 */
 
 /* ---- 玩法标签：自定义 / 每日挑战 ----
    跟战绩面板那两颗标签（.rec-tabs / .rtab）是同一副样子，尺寸压小一号：
@@ -322,9 +324,23 @@
 .qbtn:active { transform: translateY(2px); box-shadow: none; }
 .qbtn.is-on { background: var(--accent); }
 
-/* ---- 换一局（面板底下那颗：上面那三组都在这里落地） ---- */
+/* ---- 换一局（面板底下那颗：上面那三组都在这里落地） ----
+   挑战组摊开时这一页会比一屏高（每日挑战那一路尤其：三排挡位 + 六颗开关，
+   390×844 上溢出约一成）。所以这颗按钮**粘在窗口下沿**：内容照常从它下面滚过去，
+   主操作永远点得到——「换一局」被顶出屏幕比多滑一下糟得多。
+   不溢出时 position: sticky 本来就不起作用，收起挑战组的自定义那一路一像素都不变。 */
 .shuffle-row {
-  padding: 8px 0 6px;
+  position: sticky;
+  /* 粘在下沿时要把它自己那块底色一直铺到面板的最底面：`.sheet` 底部有
+     18px 内边距，不抵掉的话超出去的内容会从那道缝里露出来（滚到一半时
+     能看见半行「禁用记录点」）。做法是负下外边距把这一行压进内边距里，
+     下内边距再补回来——滚到底与滚到一半时它的位置一致，不会跳一下。 */
+  bottom: calc(-18px - env(safe-area-inset-bottom, 0px));
+  margin-bottom: calc(-18px - env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  padding: 8px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-card);
+  box-shadow: 0 -10px 14px -8px rgba(58, 51, 53, .22);
 }
 
 .shuffle-row .btn {

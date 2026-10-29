@@ -328,21 +328,24 @@ await markAllButQueens(0);
 await waitNudge(true);
 check('重来一盘仍然能露', (await nudgeState()).hidden === false);
 
-// 挑战里禁用提示 → 这条捷径也不给
-/* 那一档的开关现在记在**这一局的状态**上（state.noHint），不再是设置里的偏好：
- * 每日挑战会把提示锁死，而玩家自己的设置可能开着（见 core/state.js）。 */
-const noHint = await page.evaluate(() => {
-  __QUEENS_DEBUG__.state.noHint = true;
-  __QUEENS_DEBUG__.render();
-  document.getElementById('btnSettings').click();
-  const b = document.getElementById('btnFinish');
-  const closed = b.hidden;
-  document.getElementById('btnCloseSheet').click();
-  __QUEENS_DEBUG__.state.noHint = false;
-  __QUEENS_DEBUG__.render();
-  return { closed };
+// 「补齐」与「禁用提示」已经分开（2026-10-29）：前者看 state.autoFill，
+// 后者只管提示按钮。两把都记在**这一局的状态**上（每日挑战会按挡位关掉补齐）。
+const fillGates = await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.state.noHint = true;              // 禁用提示：不该再连带收回补齐
+  d.render();
+  const withNoHint = document.getElementById('btnFinish').hidden;
+  d.state.autoFill = false;           // 关掉自动补全：这一行才收回去
+  d.render();
+  const withNoFill = document.getElementById('btnFinish').hidden;
+  d.state.autoFill = true;
+  d.state.noHint = false;
+  d.render();
+  return { withNoHint, withNoFill, back: document.getElementById('btnFinish').hidden };
 });
-check('禁用提示的那一档不给补齐', noHint.closed === true);
+check('禁用提示不再连带收回补齐', fillGates.withNoHint === false);
+check('关掉自动补全就不给补齐', fillGates.withNoFill === true);
+check('两个开关都恢复后补齐又露出来', fillGates.back === false);
 
 // ============================================================
 // 3. 点下去：挨个落子、只压一个撤销点、最后照常判胜

@@ -1,15 +1,20 @@
 /* ============================================================================
  * panels/settings.js · 设置面板
  * ----------------------------------------------------------------------------
- * 只剩那一列「拨了立刻生效」的开关：自动打 × / 拖动对齐 / 两个淡化 / 模糊背景 /
- * 冲突高亮 / 唯一位置提示 / 音效 / 震动。它们改的是玩起来的手感与观感，
+ * 只剩那一列「拨了立刻生效」的开关：拖动对齐 / 拖动只标同色 / 两个淡化 /
+ * 模糊背景 / 冲突高亮 / 音效 / 震动。它们改的是玩起来的手感与观感，
  * 跟棋盘上摆的是什么无关，所以不需要「换一局」来落地。
+ *
+ * 「自动打 ×」与「唯一位置提示」2026-10-29 搬去了「开一局新的」的挑战组：
+ * 它们现在是**这一局的规矩**（每日挑战按挡位关掉），跟限时 / 禁提示一个口径，
+ * 不再是「拨了立刻生效」的偏好。一键补齐也从「禁用提示」里分了出来，
+ * 在那边单独占一颗开关（原来的联动见 app/actions.js 的 fillQueens）。
  *
  * 这个面板原先还装着「开一局新的」（棋盘大小 / 目标难度 / 挑战）与「分享这一
  * 局」，现在都搬走了：
  *   · 开新局 → panels/newgame.js（顶栏那颗「新一局」）
  *   · 分享   → panels/info.js（本局信息页）
- * 于是这里既没有折叠，也没有下半截——一屏摊开就这九行。
+ * 于是这里既没有折叠，也没有下半截——一屏摊开就这八行。
  *
  * 行本身的样式（.switch-row / .switch / .stepper-label）在 base/buttons.css，
  * 换一局面板也在用；这份文件只写「设置这一列」的节奏。
@@ -42,13 +47,13 @@ export var HTML = /* html */ `
 
     <div class="settings-list">
       <div class="switch-row">
-        <div class="stepper-label">自动打 ×<small>同行、同列、相邻格和整片同色块都会自动打叉</small></div>
-        <button class="switch" id="swAuto" type="button" role="switch" aria-checked="true" aria-label="自动标记"></button>
+        <div class="stepper-label">拖动按行列对齐<small>开着时长按拖动只涂一行或一列；关掉后可以顺着手指轨迹随意涂</small></div>
+        <button class="switch" id="swAlignDrag" type="button" role="switch" aria-checked="true" aria-label="拖动按行列对齐"></button>
       </div>
 
       <div class="switch-row">
-        <div class="stepper-label">拖动按行列对齐<small>开着时长按拖动只涂一行或一列；关掉后可以顺着手指轨迹随意涂</small></div>
-        <button class="switch" id="swAlignDrag" type="button" role="switch" aria-checked="true" aria-label="拖动按行列对齐"></button>
+        <div class="stepper-label">拖动只标同色<small>拖拽时只标与起点颜色相同的格子，划到别的色块就停手，免得误标</small></div>
+        <button class="switch" id="swSameColor" type="button" role="switch" aria-checked="false" aria-label="拖动只标同色"></button>
       </div>
 
       <div class="switch-row">
@@ -72,11 +77,6 @@ export var HTML = /* html */ `
       </div>
 
       <div class="switch-row">
-        <div class="stepper-label">唯一位置提示<small>某行、某列或某个色块只剩一格没标 × 时，这格会亮一下</small></div>
-        <button class="switch" id="swForced" type="button" role="switch" aria-checked="true" aria-label="唯一位置提示"></button>
-      </div>
-
-      <div class="switch-row">
         <div class="stepper-label">音效<small>落子、打叉、冲突与胜利提示音</small></div>
         <button class="switch" id="swSound" type="button" role="switch" aria-checked="true" aria-label="音效"></button>
       </div>
@@ -95,13 +95,12 @@ var sheetCtl = null;
 
 /* 开关列：顺序与 markup 一致，syncSheet 按这张表把 aria-checked 刷回真实值 */
 var SWITCHES = [
-  ['swAuto', 'autoMark'],
   ['swAlignDrag', 'alignDrag'],
+  ['swSameColor', 'dragSameColor'],
   ['swFadeMark', 'fadeMark'],
   ['swFadeQueen', 'fadeQueen'],
   ['swBlurBg', 'blurBg'],
   ['swConflict', 'conflict'],
-  ['swForced', 'forced'],
   ['swSound', 'sound'],
   ['swHaptics', 'haptics']
 ];
@@ -150,14 +149,16 @@ export function mount(host) {
     var sw = e.target.closest ? e.target.closest('.switch') : null;
     if (!sw) return;
     var id = sw.id;
-    if (id === 'swAuto') {
-      settings.autoMark = !settings.autoMark;
-      render();
-    } else if (id === 'swAlignDrag') {
+    if (id === 'swAlignDrag') {
       // 拖动对齐只影响手指怎么涂，棋盘不用重画；提示行那句话跟着换
       settings.alignDrag = !settings.alignDrag;
       updateHint();
       announce(settings.alignDrag ? '拖动：按行列对齐' : '拖动：可以随意涂');
+    } else if (id === 'swSameColor') {
+      /* 只标同色也只看下一笔怎么涂：棋盘不用重画。提示行那句话不跟着换——
+       * 它已经为「对齐 / 随意」换过一次文案，再加一条要说不清。 */
+      settings.dragSameColor = !settings.dragSameColor;
+      announce(settings.dragSameColor ? '拖动：只标与起点同色的格子' : '拖动：可以跨色块标记');
     } else if (id === 'swFadeMark' || id === 'swFadeQueen') {
       // 淡化是纯外观，不用重画格子：只加减一个类。拨开关的人正盯着效果，
       // 这里不跟 0.5 秒防抖，立刻落地（见 ui/fade.js 的 applyFadeNow）。
@@ -173,9 +174,6 @@ export function mount(host) {
     } else if (id === 'swConflict') {
       settings.conflict = !settings.conflict;
       if (!settings.conflict) view.lastConflictCount = 0;
-      render();
-    } else if (id === 'swForced') {
-      settings.forced = !settings.forced;
       render();
     } else if (id === 'swSound') {
       settings.sound = !settings.sound;

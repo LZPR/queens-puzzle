@@ -593,7 +593,7 @@ const sw = await page.evaluate(() => {
     checked: b.getAttribute('aria-checked'),
     label: b.getAttribute('aria-label'),
     text: row.querySelector('.stepper-label').textContent.trim(),
-    // 九个开关在 390×844 上仍然一屏放得下
+    // 八个开关在 390×844 上仍然一屏放得下
     over: sheet.scrollHeight - sheet.clientHeight,
     count: sheet.querySelectorAll('.switch').length,
     // 跟两个淡化挨在一起（视觉降噪是一组）
@@ -605,7 +605,7 @@ ok('设置里有「模糊背景」这一行', sw.exists && sw.label === '模糊�
 ok('说明写清了它只管背景', /背景/.test(sw.text) && /棋盘/.test(sw.text), sw.text);
 ok('默认关着', sw.checked === 'false');
 ok('紧跟在两个淡化后面', sw.order === sw.fadeQueen + 1, [sw.fadeQueen, sw.order]);
-ok('九个开关在 390×844 上仍一屏放得下', sw.count === 9 && sw.over <= 0, `n=${sw.count} over=${sw.over}`);
+ok('八个开关在 390×844 上仍一屏放得下', sw.count === 8 && sw.over <= 0, `n=${sw.count} over=${sw.over}`);
 
 await page.evaluate(() => document.getElementById('swBlurBg').click());
 await sleep(250);

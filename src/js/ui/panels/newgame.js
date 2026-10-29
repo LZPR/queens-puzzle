@@ -8,7 +8,9 @@
  *                难度五挡，完成前一挡才解锁下一挡；棋盘固定该挡最大盘；
  *                **限时 / 限步 / 标错惩罚里每天每挡只抽两样**（限时按挡位
  *                3/5/10/15/20 分、限步按挡位 60/100/150/250/400 步、标错固定
- *                3 条命），剩下一项这局不设限；禁用提示、可以撤销、记录点可用。
+ *                3 条命），剩下一项这局不设限；禁用提示、可以撤销、记录点可用；
+ *                三个辅助随难度关掉：较难关自动补全、困难再关自动标 ×、
+ *                极难连唯一位置提示也关（见 core/daily.js 的 TIER_ASSISTS）。
  *                这些全锁着，改不了。
  *
  * 自定义那一路的三组（尺寸 / 难度 / 挑战）都只写 pending，点「换一局」才落地
@@ -16,7 +18,7 @@
  * 每日挑战没有这个「待生效」的概念：选好难度点「开始今日挑战」，当场换盘。
  *
  * 挑战那一组改成了可折叠（标题那一行就是开关，右边挂着当前设定的摘要）：
- * 三颗开关加三排挡位，铺开以后这一页在 390×844 上就顶到「换一局」了。
+ * 三排挡位加六颗开关，铺开以后这一页在 390×844 上就顶到「换一局」了。
  * 折叠状态只在这一页里有效（模块变量，不落盘）；切到每日挑战会自动摊开，
  * 因为那一组的每一项都被锁住了，看不见就不知道自己在打什么。
  *
@@ -147,18 +149,37 @@ export var HTML = /* html */ `
         <div class="limit-opts" id="lifeOpts" role="group" aria-label="标错惩罚"></div>
       </div>
 
+      <!-- 三个「辅助」：自动标 × / 唯一位置提示原来是设置里的偏好，2026-10-29 搬到这里。
+           它们现在是**这一局的规矩**（每日挑战按挡位逐级关掉），所以跟限时一样
+           只在点「换一局」时落地、中途改不了。自动补全原来跟着「禁用提示」走，
+           现在单独一颗——禁用提示只管提示按钮。 -->
       <div class="switch-row">
-        <div class="stepper-label">禁用提示<small>这局的提示按钮不可用，只能自己推</small></div>
+        <div class="stepper-label">自动标 ×<small>同行同列和同色块自动打叉</small></div>
+        <button class="switch" id="swAutoMark" type="button" role="switch" aria-checked="true" aria-label="自动标记"></button>
+      </div>
+
+      <div class="switch-row">
+        <div class="stepper-label">唯一位置提示<small>某行某列只剩一格时亮</small></div>
+        <button class="switch" id="swForced" type="button" role="switch" aria-checked="true" aria-label="唯一位置提示"></button>
+      </div>
+
+      <div class="switch-row">
+        <div class="stepper-label">自动补全<small>只剩皇后时露「补齐」</small></div>
+        <button class="switch" id="swAutoFill" type="button" role="switch" aria-checked="true" aria-label="自动补全"></button>
+      </div>
+
+      <div class="switch-row">
+        <div class="stepper-label">禁用提示<small>提示按钮不可用</small></div>
         <button class="switch" id="swNoHint" type="button" role="switch" aria-checked="false" aria-label="禁用提示"></button>
       </div>
 
       <div class="switch-row">
-        <div class="stepper-label">禁用撤销<small>落错子不能退回，也没有重做</small></div>
+        <div class="stepper-label">禁用撤销<small>不能撤销和重做</small></div>
         <button class="switch" id="swNoUndo" type="button" role="switch" aria-checked="false" aria-label="禁用撤销"></button>
       </div>
 
       <div class="switch-row">
-        <div class="stepper-label">禁用记录点<small>不能记下 / 还原，推歪了只能靠撤销</small></div>
+        <div class="stepper-label">禁用记录点<small>不能记下或还原</small></div>
         <button class="switch" id="swNoSnap" type="button" role="switch" aria-checked="false" aria-label="禁用记录点"></button>
       </div>
     </div>
@@ -220,6 +241,10 @@ function applyMode() {
     pending.noHint = true;
     pending.noUndo = false;
     pending.noSnap = false;
+    /* 三个辅助按挡位（较难关补齐、困难再关自动 ×、极难连定位也关） */
+    pending.autoMark = r.autoMark;
+    pending.forced = r.forced;
+    pending.autoFill = r.autoFill;
     return;
   }
 
@@ -233,6 +258,9 @@ function applyMode() {
   pending.noHint = !!settings.noHint;
   pending.noUndo = !!settings.noUndo;
   pending.noSnap = !!settings.noSnap;
+  pending.autoMark = settings.autoMark !== false;
+  pending.forced = settings.forced !== false;
+  pending.autoFill = settings.autoFill !== false;
 }
 
 function setMode(next) {
@@ -354,6 +382,16 @@ function challengeBits() {
   if (!!pending.noSnap !== !!settings.noSnap) {
     bits.push(pending.noSnap ? '禁用记录点' : '记录点可用');
   }
+  /* 三个辅助是「开着」为正：关掉才算加了难度，所以只说关掉的那几样 */
+  if (!!pending.autoMark !== (settings.autoMark !== false)) {
+    bits.push(pending.autoMark ? '自动打 ×' : '不自动打 ×');
+  }
+  if (!!pending.forced !== (settings.forced !== false)) {
+    bits.push(pending.forced ? '唯一位置提示' : '不提示唯一位置');
+  }
+  if (!!pending.autoFill !== (settings.autoFill !== false)) {
+    bits.push(pending.autoFill ? '自动补全' : '不自动补全');
+  }
   return bits;
 }
 
@@ -378,7 +416,9 @@ function challengeSumText() {
   if (mode === 'daily') {
     var r = ruleOf(pending.difficulty, today());
     /* 只列今天真比的那两样 + 恒定项。「限时 20 分 · 400 步 · 无提示」是这一行最长的形态，
-       标题放大之后它窄了，320 上才不至于截得只剩半句。 */
+       标题放大之后它窄了，320 上才不至于截得只剩半句。
+       那三样辅助（补全 / 自动 × / 定位）**不进这一行**：塞进来一定会被省略号吃掉，
+       它们挂在下面那行说明里，摊开的那一组里也逐颗写着。 */
     return r ? dailyRuleBits(r).concat(['无提示']).join(' · ') : '由难度决定';
   }
   var bits = [pending.timeLimit ? '限时 ' + limitLabel(pending.timeLimit) : '不限时'];
@@ -387,7 +427,17 @@ function challengeSumText() {
   if (pending.noHint) bits.push('无提示');
   if (pending.noUndo) bits.push('无撤销');
   if (pending.noSnap) bits.push('无记录点');
-  return bits.join(' · ');
+  return bits.concat(assistOffBits(pending)).join(' · ');
+}
+
+/* 关掉的辅助拼成一小段（开着的不提）：摘要与按钮下方那行共用。
+ * 每日挑战的三样由挡位决定（见 core/daily.js 的 TIER_ASSISTS）。 */
+function assistOffBits(a) {
+  var bits = [];
+  if (!a.autoFill) bits.push('无补全');
+  if (!a.autoMark) bits.push('无自动×');
+  if (!a.forced) bits.push('无定位');
+  return bits;
 }
 
 /* 换一局时把挑战的意向落到设置上：这是它唯一生效的时机 */
@@ -398,6 +448,11 @@ export function commitChallenge() {
   settings.noHint = !!pending.noHint;
   settings.noUndo = !!pending.noUndo;
   settings.noSnap = !!pending.noSnap;
+  /* 三个辅助也顺手记成「自定义下一次开局的默认值」。每日挑战不写这几项
+   * （它整条路都不走 commitChallenge，见下面那颗按钮）。 */
+  settings.autoMark = pending.autoMark !== false;
+  settings.forced = pending.forced !== false;
+  settings.autoFill = pending.autoFill !== false;
   saveSettings();
 }
 
@@ -591,6 +646,10 @@ export function syncNew() {
   setSwitch('swNoHint', pending.noHint, daily);
   setSwitch('swNoUndo', pending.noUndo, daily);
   setSwitch('swNoSnap', pending.noSnap, daily);
+  /* 三个辅助：自定义只写 pending，每日挑战按挡位写死（灰掉 = 这一挡就是这样） */
+  setSwitch('swAutoMark', pending.autoMark, daily);
+  setSwitch('swForced', pending.forced, daily);
+  setSwitch('swAutoFill', pending.autoFill, daily);
 
   // 有没落地的改动就把组标题点亮，别让人以为已经生效了。
   // 每日挑战没有「待生效」这回事，它说的是「已锁定」。
@@ -629,8 +688,10 @@ export function syncShuffleRow() {
     btnShuffle.textContent = done ? '再打一遍' : '开始今日挑战';
     btnShuffle.classList.toggle('is-pending', !done);
     shuffleHint.classList.toggle('is-pending', false);
+    /* 这一行是可换行的说明，规则的细节都放这里：真比的那两样 + 恒定项 +
+     * 这一挡关掉的辅助（标题那条摘要塞不下，见 challengeSumText）。 */
     shuffleHint.textContent = '今日 ' + band.name + ' ' + r.size + '×' + r.size +
-      ' · ' + dailyRuleBits(r).join(' · ') +
+      ' · ' + dailyRuleBits(r).concat(['无提示'], assistOffBits(r)).join(' · ') +
       (done ? ' · 今天打过了，只刷新时间' : '');
     return;
   }
@@ -803,9 +864,13 @@ export function mount(host) {
       pending.timeLimit = r.limit;
       pending.stepLimit = r.steps;
       pending.lifeLimit = r.lives;
+      /* 三个辅助也按挡位走：较难关补齐、困难再关自动 ×、极难连定位也关 */
+      pending.autoMark = r.autoMark;
+      pending.forced = r.forced;
+      pending.autoFill = r.autoFill;
       syncNew();
       announce('今日挑战：' + DIFF_BANDS[lv].name + ' ' + r.size + '×' + r.size +
-        '，' + dailyRuleBits(r).join(' · '));
+        '，' + dailyRuleBits(r).concat(assistOffBits(r)).join(' · '));
       return;
     }
 
@@ -881,8 +946,9 @@ export function mount(host) {
     }
   });
 
-  /* 挑战那三颗开关：跟限时 / 步数一样只写 pending，换一局才生效。
-   * 每日挑战里它们是锁着的（按钮 disabled，键盘也点不到）。 */
+  /* 挑战那几颗开关：跟限时 / 步数一样只写 pending，换一局才生效。
+   * 每日挑战里它们是锁着的（按钮 disabled，键盘也点不到）。
+   * 三个辅助（自动标 × / 唯一位置提示 / 自动补全）跟三把锁同一个规矩。 */
   sheet.addEventListener('click', function (e) {
     var sw = e.target.closest ? e.target.closest('.switch') : null;
     if (!sw) return;
@@ -896,6 +962,15 @@ export function mount(host) {
     } else if (sw.id === 'swNoSnap') {
       pending.noSnap = !pending.noSnap;
       announce(pending.noSnap ? '挑战：换一局后禁用记录点' : '挑战：换一局后恢复记录点');
+    } else if (sw.id === 'swAutoMark') {
+      pending.autoMark = !pending.autoMark;
+      announce(pending.autoMark ? '挑战：换一局后自动标 ×' : '挑战：换一局后不自动标 ×');
+    } else if (sw.id === 'swForced') {
+      pending.forced = !pending.forced;
+      announce(pending.forced ? '挑战：换一局后提示唯一位置' : '挑战：换一局后不提示唯一位置');
+    } else if (sw.id === 'swAutoFill') {
+      pending.autoFill = !pending.autoFill;
+      announce(pending.autoFill ? '挑战：换一局后可以一键补齐' : '挑战：换一局后不给一键补齐');
     } else {
       return;
     }

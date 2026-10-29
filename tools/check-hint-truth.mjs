@@ -43,7 +43,10 @@ await sleep(600);
 const setup = await page.evaluate(() => {
   const d = __QUEENS_DEBUG__;
   const H = window.QueensHint;
+  /* 自动打 × 是这一局的规矩（state），而 d.newGame() 会照 settings 重开一局，
+   * 所以两边都得拨掉——否则循环里每换一盘它又按默认开着回来了。 */
   d.settings.autoMark = false;
+  d.state.autoMark = false;
   const found = [];
 
   const rand = (seed) => {

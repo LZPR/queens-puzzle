@@ -120,7 +120,10 @@ const sheetUi = () => page.evaluate(() => {
     note: document.getElementById('newNote').textContent.trim(),
     noHint: document.getElementById('swNoHint').getAttribute('aria-checked'),
     noUndo: document.getElementById('swNoUndo').getAttribute('aria-checked'),
-    aboveShuffle: gr.bottom <= sr.top + 1,
+    /* 「挑战组在换一局之上」按文档顺序验：底部那颗按钮现在粘在下沿
+     * （挑战组摊开时这一页会比一屏高，见 newgame.css），几何位置不再可靠 */
+    aboveShuffle: !!(g.compareDocumentPosition(sw) & Node.DOCUMENT_POSITION_FOLLOWING),
+    groupBottom: Math.round(gr.bottom), shuffleTop: Math.round(sr.top),
     shufflePending: document.getElementById('btnShuffle').classList.contains('is-pending'),
     shuffleHint: document.getElementById('shuffleHint').textContent.trim(),
     switches: document.querySelectorAll('#newSheet .switch').length,
@@ -146,7 +149,9 @@ ok('步数限制挡位 6 个且首个是「不限」',
 ok('步数限制默认也是「不限」', ui.stepOn.length === 1 && ui.stepOn[0] === '不限', ui.stepOn);
 // 挑战是「开一局新的」的一部分，跟棋盘大小 / 目标难度一起住在换一局面板里；
 // 设置面板那一列只剩 8 个偏好开关，那 8 个不在这里数。
-ok('换一局面板里三颗挑战开关（禁用提示 / 撤销 / 记录点）', ui.switches === 3, ui.switches);
+// 六颗：自动标 × / 唯一位置提示 / 自动补全（2026-10-29 新增的三颗辅助）
+// + 禁用提示 / 撤销 / 记录点。
+ok('换一局面板里六颗挑战开关（三颗辅助 + 三颗禁用）', ui.switches === 6, ui.switches);
 ok('没有未落地改动时标题是「挑战」', ui.title === '挑战' && !ui.titlePending, ui.title);
 ok('面板不横向溢出', ui.overflowX <= 0, ui.overflowX);
 /* 折叠：关掉面板再打开，还是上一次的开合状态（只在这一页里有效，不落盘） */
@@ -424,7 +429,7 @@ console.log('\n--- 10. 步数限制：挡位 / 落地 / 用完判负 / 刷新还
 /* 关掉自动打叉：自动标过的格子点下去不动，凑不满步数。
  * 只改内存里的设置（不点面板），这一节最后再还回去。 */
 await page.evaluate(() => {
-  __QUEENS_DEBUG__.settings.autoMark = false;
+  __QUEENS_DEBUG__.state.autoMark = false;
   __QUEENS_DEBUG__.newGame(8);
 });
 await page.waitForFunction(() => {
@@ -560,7 +565,7 @@ await shuffle(seed6.seed);
 const cleared = await st();
 ok('换回「不限」后限步清掉', cleared.stepLimit === 0 && cleared.stepUnit === '步',
   `${cleared.stepLimit}/${cleared.stepUnit}`);
-await page.evaluate(() => { __QUEENS_DEBUG__.settings.autoMark = true; });
+await page.evaluate(() => { __QUEENS_DEBUG__.state.autoMark = true; });
 
 console.log('\n--- console ---');
 console.log(errs.length ? errs.join('\n') : '(none)');

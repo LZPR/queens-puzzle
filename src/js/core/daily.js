@@ -18,6 +18,8 @@
  *   抽哪两样只认「日期 + 档位」，跟棋盘一个道理：同一挡今天刷新多少回都一样，
  *   换一天（或换一挡）才可能换组合 —— 见 skipOf()。
  *   恒定项：禁用提示 · 可以撤销 · 记录点可用
+ *   三个辅助随难度逐级关掉：较难关自动补全、困难再关自动标 ×、极难连唯一位置提示
+ *   也关（见 TIER_ASSISTS）。它们跟限时那三样不一样，**不抽签**，只按挡位定。
  *   完成任意一挡就算完成今日挑战（五挡是同一天里可选的五个尺寸，不是五道关卡）；
  *   解锁链照旧，完成前一挡才开下一挡。
  *
@@ -42,6 +44,19 @@ var TIER_STEPS = { easy: 60, mid: 100, advanced: 150, hard: 250, extreme: 400 };
 
 /* 每挡多久：容易到极难 3 → 20 分钟，一挡比一挡宽。 */
 var TIER_MS = { easy: 180000, mid: 300000, advanced: 600000, hard: 900000, extreme: 1200000 };
+
+/* 每挡留哪几样「辅助」。默认三样全开，随难度逐级关掉：
+ *   较难（advanced）起关「自动补全」——一盘 9–14 的盘不该一键收尾；
+ *   困难（hard）起再关「自动标 ×」——叉要自己划，推理才是这一挡的正题；
+ *   极难（extreme）连「唯一位置提示」也关——那是最直接的答案泄漏。
+ * 「禁用提示」是恒定的（rulesFor 里写死），不在这张表里。 */
+var TIER_ASSISTS = {
+  easy: { autoFill: true, autoMark: true, forced: true },
+  mid: { autoFill: true, autoMark: true, forced: true },
+  advanced: { autoFill: false, autoMark: true, forced: true },
+  hard: { autoFill: false, autoMark: false, forced: true },
+  extreme: { autoFill: false, autoMark: false, forced: false }
+};
 
 /** 留多少天的记录：一年多一点。再老的按日期丢掉，不至于把 localStorage 撑爆。 */
 var KEEP_DAYS = 400;
@@ -92,17 +107,21 @@ export function skipOf(day, tier) {
 }
 
 /** 某一挡的规矩：棋盘固定这一档能开的最大盘；限时 / 限步 / 标错里抽两样，
- *  没抽到的那一项给 0（不限 / 不惩罚）。day 省略就是今天。 */
+ *  没抽到的那一项给 0（不限 / 不惩罚）。三个辅助按挡位递进关掉（见 TIER_ASSISTS）。 */
 export function ruleOf(tier, day) {
   var b = DIFF_BANDS[tier];
   if (!b) return null;
   var d = day || dayKey();
   var skip = skipOf(d, tier);
+  var assist = TIER_ASSISTS[tier] || { autoFill: true, autoMark: true, forced: true };
   return {
     tier: tier, day: d, size: b.hi, skip: skip,
     limit: skip === 'time' ? 0 : (TIER_MS[tier] || 0),
     steps: skip === 'steps' ? 0 : (TIER_STEPS[tier] || 0),
-    lives: skip === 'lives' ? 0 : DAILY_LIVES
+    lives: skip === 'lives' ? 0 : DAILY_LIVES,
+    autoFill: assist.autoFill,
+    autoMark: assist.autoMark,
+    forced: assist.forced
   };
 }
 
@@ -118,6 +137,9 @@ export function rulesFor(day, tier) {
     noHint: true,
     noUndo: false,
     noSnap: false,
+    autoMark: r.autoMark,
+    forced: r.forced,
+    autoFill: r.autoFill,
     daily: { day: day, tier: tier }
   };
 }

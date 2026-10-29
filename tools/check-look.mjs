@@ -74,6 +74,8 @@ const bar = await page.evaluate(() => ({
   label: document.getElementById('btnLook').getAttribute('aria-label'),
   expanded: document.getElementById('btnLook').getAttribute('aria-expanded'),
   set: document.getElementById('btnLook').classList.contains('is-set'),
+  // 自动打叉 2026-10-29 搬进了换一局面板的挑战组（同一个文档，照样取得到）
+  swAutoMark: !!document.getElementById('swAutoMark'),
   swAuto: !!document.getElementById('swAuto'),
   // 顶栏四颗按钮：外观 / 新局 / 战绩 / 设置
   icons: document.querySelectorAll('.actions .icon-btn').length,
@@ -86,7 +88,7 @@ ok('换成了外观按钮', bar.look && bar.label === '外观' && bar.expanded =
 ok('顶栏仍是四颗图标按钮', bar.icons === 4, bar.icons);
 ok('顶栏不溢出', bar.fits);
 ok('默认样式下按钮没有小黄点', bar.set === false);
-ok('设置里还有自动打叉开关', bar.swAuto);
+ok('自动打叉搬去了换一局面板，设置里不再有它', bar.swAutoMark && !bar.swAuto);
 ok('开箱就是纯色（白送的是没有图案的那一套）',
   bar.look.surface === 'plain' && bar.attr === 'plain', JSON.stringify(bar.look));
 

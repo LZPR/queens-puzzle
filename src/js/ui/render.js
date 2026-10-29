@@ -23,15 +23,16 @@ import { fadeCell, settleFade } from './fade.js';
    ========================================================== */
 export function render(anim) {
   var n = state.size;
-  var auto = settings.autoMark ? computeAuto() : new Uint8Array(n * n);
+  /* 自动打 × / 唯一位置提示现在是**这一局的规矩**（state.*），不再是设置里的偏好：
+   * 每日挑战会按挡位把它们逐级关掉，而玩家自己的设置可能开着（见 core/state.js）。 */
+  var auto = state.autoMark ? computeAuto() : new Uint8Array(n * n);
   var cf = computeConflicts();
-  var forced = settings.forced ? computeForced(auto) : new Uint8Array(n * n);
+  var forced = state.forced ? computeForced(auto) : new Uint8Array(n * n);
   var showConflict = settings.conflict;
   var counts = regionCounts();
 
   state.auto = auto;
   state.conflicts = cf;
-  state.forced = forced;
   state.regionCounts = counts;
   // 整块被 × 填满却没皇后的色块：棋盘描红边、色卡打叉，两处一起说同一件事。
   // 注意这里只是「算出实情」，亮不亮由 syncBad 按 1s 防抖决定（见 drawBadRegions 上方）

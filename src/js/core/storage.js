@@ -33,6 +33,9 @@ export function loadSettings() {
     settings.alignDrag = s.alignDrag !== false;
     settings.conflict = s.conflict !== false;
     settings.forced = s.forced !== false;
+    settings.autoFill = s.autoFill !== false;
+    /* 「拖动只标同色」：新字段，老存档没有就是关着（那才是原来的手感）。 */
+    settings.dragSameColor = s.dragSameColor === true;
     settings.sound = s.sound !== false;
     settings.haptics = s.haptics !== false;
     settings.timeLimit = normalizeLimit(s.timeLimit);
@@ -113,6 +116,11 @@ export function doSave() {
       noHint: !!state.noHint,
       noUndo: !!state.noUndo,
       noSnap: !!state.noSnap,
+      /* 三个辅助（自动打 × / 唯一位置提示 / 一键补齐）：每日挑战按挡位关掉的那几样
+       * 刷新回来还得是关着的，所以也跟存档走，不复读 settings。 */
+      autoMark: !!state.autoMark,
+      forced: !!state.forced,
+      autoFill: !!state.autoFill,
       /* 每日挑战：day + tier。读档时按它重新生成那一包规矩（见 loadGame），
        * 这样「今天这一盘」刷新回来还是同一盘、同一个日期。 */
       daily: state.daily || null,
@@ -186,6 +194,14 @@ export function loadGame() {
     state.noHint = dr ? dr.noHint : (g.noHint != null ? g.noHint === true : !!settings.noHint);
     state.noUndo = dr ? dr.noUndo : (g.noUndo != null ? g.noUndo === true : !!settings.noUndo);
     state.noSnap = dr ? dr.noSnap : (g.noSnap != null ? g.noSnap === true : !!settings.noSnap);
+    /* 三个辅助：每日挑战按挡位重算（dr 里带着），自定义按存档里那一局；
+     * 老存档没有这几个字段，就照设置抄——那时的行为就是「全开」。 */
+    state.autoMark = dr ? dr.autoMark !== false
+      : (g.autoMark != null ? g.autoMark === true : settings.autoMark !== false);
+    state.forced = dr ? dr.forced !== false
+      : (g.forced != null ? g.forced === true : settings.forced !== false);
+    state.autoFill = dr ? dr.autoFill !== false
+      : (g.autoFill != null ? g.autoFill === true : settings.autoFill !== false);
     state.lostBy = null;   // 超时 / 步数 / 命用尽的那局恢复成 playing，心跳会再判一次负
     /* 记录点（「记下这一刻」存的那一盘）：长度对不上就不要——换了尺寸的旧档或者
      * 半截数据都属这一类，装上去等于给玩家一盘错位的棋。没有就是 null（回到「记录」）。 */

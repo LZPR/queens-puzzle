@@ -96,6 +96,9 @@ const panel = () => page.evaluate(() => {
     noHint: document.getElementById('swNoHint').getAttribute('aria-checked'),
     noUndo: document.getElementById('swNoUndo').getAttribute('aria-checked'),
     noSnap: document.getElementById('swNoSnap').getAttribute('aria-checked'),
+    autoMark: document.getElementById('swAutoMark').getAttribute('aria-checked'),
+    forced: document.getElementById('swForced').getAttribute('aria-checked'),
+    autoFill: document.getElementById('swAutoFill').getAttribute('aria-checked'),
     switchesLocked: [...document.querySelectorAll('#newSheet .switch')].every(b => b.disabled),
     limitHint: txt('limitHint').trim(),
     stepHint: txt('stepHint').trim(),
@@ -122,6 +125,10 @@ const game = () => page.evaluate(() => {
     noHint: d.state.noHint,
     noUndo: d.state.noUndo,
     noSnap: d.state.noSnap,
+    autoMark: d.state.autoMark,
+    forced: d.state.forced,
+    autoFill: d.state.autoFill,
+    fillHidden: document.getElementById('btnFinish').hidden,
     daily: d.state.daily,
     hintDisabled: document.getElementById('btnHint').disabled,
     undoLocked: document.getElementById('btnUndo').classList.contains('is-locked'),
@@ -212,7 +219,11 @@ ok('标错挡位全灰', p.lifeAllDisabled);
 ok('禁用提示开 / 撤销关 / 记录点可用',
   p.noHint === 'true' && p.noUndo === 'false' && p.noSnap === 'false',
   `${p.noHint}/${p.noUndo}/${p.noSnap}`);
-ok('三颗开关都锁着', p.switchesLocked);
+ok('六颗开关都锁着', p.switchesLocked);
+/* 三样辅助按挡位递进关（2026-10-29）：容易这一挡三样全开 */
+ok('容易这一挡三样辅助都开着',
+  p.autoMark === 'true' && p.forced === 'true' && p.autoFill === 'true',
+  `${p.autoMark}/${p.forced}/${p.autoFill}`);
 ok('每排说明都对着今天的抽签说话',
   (easyRule.skip === 'time' ? /不比限时/.test(p.limitHint) : /固定限时/.test(p.limitHint)) &&
   (easyRule.skip === 'steps' ? /不比步数/.test(p.stepHint) : /固定限步/.test(p.stepHint)) &&
@@ -220,6 +231,27 @@ ok('每排说明都对着今天的抽签说话',
   [p.limitHint, p.stepHint, p.lifeHint]);
 ok('摘要只列今天真比的两样',
   p.sum === eUI.bits.concat(['无提示']).join(' · '), p.sum);
+/* 三样辅助不抽签，只按挡位定：较难起关补齐、困难起再关自动 ×、极难连定位也关。
+ * 直接对着 ruleOf() 的纯函数值验一遍五挡。 */
+const assistTable = await page.evaluate(() => ['easy', 'mid', 'advanced', 'hard', 'extreme']
+  .map(t => {
+    const r = __QUEENS_DEBUG__.dailyRuleOf(t, __QUEENS_DEBUG__.daily().day);
+    return [t, r.autoFill, r.autoMark, r.forced];
+  }));
+const assistWant = [
+  ['easy', true, true, true],
+  ['mid', true, true, true],
+  ['advanced', false, true, true],
+  ['hard', false, false, true],
+  ['extreme', false, false, false]
+];
+ok('辅助按挡位递进关（较难关补齐 / 困难关自动 × / 极难关定位）',
+  JSON.stringify(assistTable) === JSON.stringify(assistWant), JSON.stringify(assistTable));
+ok('辅助不进「真比哪两样」的抽签',
+  (() => {
+    const [t, f, m, p2] = assistTable[2];
+    return t === 'advanced' && f === false && m === true && p2 === true;
+  })());
 ok('难度那行说清解锁关系', /解锁/.test(p.diffHint), p.diffHint);
 ok('尺寸那行说是最大盘', /5×5/.test(p.sizeHint), p.sizeHint);
 ok('按钮变成「开始今日挑战」', p.shuffle === '开始今日挑战', p.shuffle);
@@ -250,6 +282,10 @@ ok('提示锁 / 记录点可用 / 撤销开着', g.hintDisabled && !g.snapLocked
   `${g.hintDisabled}/${g.snapLocked}/${g.undoLocked}`);
 ok('这一局记着是每日挑战', g.daily && g.daily.day === today.day && g.daily.tier === 'easy',
   JSON.stringify(g.daily));
+ok('容易这一挡：自动标 × / 定位 / 补齐都开着',
+  g.autoMark === true && g.forced === true && g.autoFill === true,
+  `${g.autoMark}/${g.forced}/${g.autoFill}`);
+ok('补齐按钮该在（还没到「只差皇后」，先收着）', g.fillHidden === true, g.fillHidden);
 ok('玩家自己的设置没被改写',
   g.saved.timeLimit === 300000 && g.saved.lifeLimit === 0 && g.saved.noHint === false,
   [g.saved.timeLimit, g.saved.lifeLimit, g.saved.noHint]);
@@ -458,9 +494,23 @@ ok('极难 = 16×16 + 今天抽到的两项',
   p.stepOn.join() === xUI.stepOn.join() && p.lifeOn.join() === xUI.lifeOn.join(),
   [p.sizeVal, p.limitOn, p.stepOn, p.lifeOn].join('/'));
 ok('面板说今天已完成', /今日已完成/.test(p.note), p.note);
+/* 极难：三样辅助全关，开关上就该是「关着」且锁死 */
+ok('极难：三样辅助全关（补齐 / 自动 × / 定位）',
+  p.autoFill === 'false' && p.autoMark === 'false' && p.forced === 'false',
+  `${p.autoFill}/${p.autoMark}/${p.forced}`);
+ok('锁着的辅助开关点不动', p.switchesLocked);
 /* 停在还没打完的「极难」上：这一天虽然已经算完成，但这一挡还是第一次打 */
 ok('按钮是「开始今日挑战」（极难还没打过）', p.shuffle === '开始今日挑战', p.shuffle);
 await page.screenshot({ path: `${SHOTS}/daily-6-late.png` });
+/* 开始极难这一局：辅助落地后整盘不该有自动 ×、也不该给补齐 */
+await jsClick('#btnShuffle');
+await waitFreshBoard(null);
+const xg = await game();
+ok('极难落地：三样辅助全关',
+  xg.autoMark === false && xg.forced === false && xg.autoFill === false,
+  `${xg.autoMark}/${xg.forced}/${xg.autoFill}`);
+ok('极难：盘上没有自动 ×、也不亮唯一位置',
+  await page.evaluate(() => document.querySelectorAll('.cell.is-auto, .cell.is-forced').length === 0));
 await closeSheet();
 
 console.log('\n--- 9. 刷新：还是同一局、锁还在 ---');
@@ -484,8 +534,11 @@ ok('刷新后还是 8×8 的每日挑战',
 ok('盘面没变', back.regions === beforeReload.regions);
 ok('刷新后规矩按「日期 + 档位」重算，一项不差',
   back.limit === midRule.limit && back.stepLimit === midRule.steps &&
-  back.noHint === true && back.noUndo === false && back.noSnap === false,
-  `${back.limit}/${back.stepLimit}/${back.noHint}/${back.noUndo}/${back.noSnap}`);
+  back.noHint === true && back.noUndo === false && back.noSnap === false &&
+  back.autoMark === midRule.autoMark && back.forced === midRule.forced &&
+  back.autoFill === midRule.autoFill,
+  `${back.limit}/${back.stepLimit}/${back.noHint}/${back.noUndo}/${back.noSnap}` +
+  ` · 辅助 ${back.autoMark}/${back.forced}/${back.autoFill}`);
 
 console.log('\n--- 10. 超时判负 / 重试（挑一挡今天真比限时的来测） ---');
 /* 五挡各抽到哪两样是日期定的，判负测试得先找到「今天比这一项」的档位。

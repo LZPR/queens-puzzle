@@ -62,6 +62,10 @@ function cellAt(x, y, clampToBoard) {
 // 只改一格，不写历史、不存盘（整笔结束时统一处理）
 function paintOne(i, mode) {
   if (i < 0) return false;
+  /* 「拖动只标同色」（设置里那颗）：划出起点所在的那一块颜色就停手，画和擦都算。
+   * 判定落在每一格上，不是「起笔时定死一块」——手指从一块颜色划进隔壁时，
+   * 隔壁那几格直接不涂，回头再划回来还能接着涂。 */
+  if (settings.dragSameColor && stroke && state.regions[i] !== stroke.region) return false;
   if (mode === 'paint') {
     if (state.marks[i] !== 0) return false;
     if (state.auto && state.auto[i]) return false;
@@ -134,6 +138,7 @@ gridEl.addEventListener('pointerdown', function (e) {
     x: e.clientX, y: e.clientY,
     moved: false, last: i,
     axis: '',                 // 首次超过阈值时定方向，之后整笔只走那一行 / 那一列
+    region: state.regions ? state.regions[i] : -1,   // 起笔那一格的颜色（「只标同色」认它）
     startR: (i / state.size) | 0,
     startC: i % state.size
   };

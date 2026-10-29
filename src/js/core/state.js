@@ -56,6 +56,15 @@ export const state = {
   noHint: false,
   noUndo: false,
   noSnap: false,
+  /* 这一局的三个「辅助」，跟上面三把锁同一套读法（也是这一局的规矩，不是偏好）：
+   *   autoMark  自动打 ×（同行 / 同列 / 相邻格 / 同色块）
+   *   forced    唯一位置提示（某行某列某块只剩一格时亮一下）
+   *   autoFill  「补齐」这颗按钮（原来跟着 noHint 走，现在单独一把）
+   * 每日挑战按挡位逐级关掉它们（见 core/daily.js 的 TIER_ASSISTS）；
+   * 自动打的 × 上不许放皇后（见 app/actions.js），所以关掉自动标 × 也是一条真规则。 */
+  autoMark: true,
+  forced: true,
+  autoFill: true,
   /* 这一局是不是每日挑战：{ day: '2026-10-26', tier: 'hard' }，不是就是 null。
    * 解开时据此记账（core/daily.js 的 mark），战绩也据此挂「每日」角标。 */
   daily: null,
@@ -76,7 +85,7 @@ export const settings = Object.assign({}, DEFAULT_SETTINGS);
 
 /* 设置面板上半部分（棋盘大小 / 目标难度 / 挑战）只是「意向」，选完不立刻作废当前这局，
  * 点「换一局」才把 pending 落到 settings 上并真的出一盘新的。
- * 下半部分的开关（自动打叉 / 音效…）是即时生效的。 */
+ * 下半部分的开关（拖动对齐 / 音效…）是即时生效的。 */
 export const pending = {
   size: 8,
   difficulty: 'any',
@@ -85,7 +94,10 @@ export const pending = {
   lifeLimit: 0,
   noHint: false,
   noUndo: false,
-  noSnap: false
+  noSnap: false,
+  autoMark: true,
+  forced: true,
+  autoFill: true
 };
 
 /* 提示引导的当前进度。提前声明：relayout() 会在 boot() 里先跑，

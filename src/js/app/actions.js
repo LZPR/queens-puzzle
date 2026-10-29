@@ -38,6 +38,18 @@ export function setMarks(next, anim) {
   if (state.status === 'playing') checkSteps();
 }
 
+/* ---- 自动打的 × 上不许放皇后 ----
+ * 那些格子是「同行 / 同列 / 相邻 / 同色块」推出来的死格，双击硬塞一颗等于把
+ * 推导推翻。判定只看 render() 算出来的 state.auto：关掉自动标 × 的局里它是空
+ * 数组，这条规矩也就自然不存在（每日挑战的较难以上会关掉它）。
+ * 返回 true 表示「拦下来了」，调用方直接收手。 */
+export function autoBlocked(i) {
+  if (!(state.auto && state.auto[i])) return false;
+  buzz(3);
+  flashHint('自动标记的 × 上放不了皇后');
+  return true;
+}
+
 export function onCell(i) {
   if (!canPlay()) return;
   /* 手一碰棋盘，上一步的残影就收掉 —— 玩家说的是「点任意格子后就消失」，
@@ -56,6 +68,9 @@ export function onCell(i) {
   // 双击：撤销第一次点击的效果，直接放皇后
   if (last && last.i === i && (now - last.t) < 340) {
     state.lastTap = null;
+    /* 自动打的 × 上放不了皇后：这一下就作废。第一笔（比如刚擦掉的手标 ×）
+     * 留在原地不还原——玩家看到的是「放不进去」，不是「刚才那下也算没发生」。 */
+    if (autoBlocked(i)) return;
     state.marks[i] = last.prev;
     /* 标错惩罚：这一格放不了皇后。第一下那笔也算这个手势的一部分，一起作废——
      * 不压撤销点、不涨步数（别的入口都走 placeQueen 里那道检查，这里先拦一道，
@@ -88,12 +103,9 @@ export function onCell(i) {
     return;
   }
 
-  if (state.auto && state.auto[i]) {
-    buzz(3);
-    flashHint('这一格已经自动标记过了，双击可以直接放皇后');
-    state.lastTap = { i: i, t: now, prev: 0, pushed: false };
-    return;
-  }
+  /* 自动打的 ×：这一格本来就放不了皇后，再点也只是提醒一句。
+   * lastTap 清掉——以前这里留着它是为了「双击直接放」，现在那条路已经封了。 */
+  if (autoBlocked(i)) { state.lastTap = null; return; }
 
   pushHistory();
   state.marks[i] = 1;
@@ -107,6 +119,8 @@ export function onCell(i) {
 export function placeQueen(i, skipHistory) {
   if (!canPlay()) return;     // 赢了 / 超时封盘的局，键盘也别想再落子
   clearTrace();               // 键盘落子不经过 onCell，残影在这儿收
+  /* 自动打的 × 上不许放皇后（键盘 Q / Enter 也走这条路，见 ui/guide.js 的「照做」） */
+  if (autoBlocked(i)) return;
   /* 标错惩罚（挑战）：这一格不是解位就别落子 —— 红 X 闪一下、格子还原成空的、
    * 扣一条命，扣光判负（见下面的 rejectQueen）。
    * 判在 pushHistory 之前：这一手压根没发生，不该进撤销栈、也不该涨步数。 */
@@ -177,7 +191,9 @@ export function clearBoard(silent) {
    ========================================================== */
 export function fillQueens() {
   if (!canPlay()) return false;
-  if (state.noHint) return false;   // 挑战里禁用提示，这条捷径也不给
+  /* 「补齐」是单独一把开关（state.autoFill），跟「禁用提示」分开了：
+   * 禁用提示只管提示按钮，这条捷径由挑战里那颗「自动补全」说了算。 */
+  if (!state.autoFill) return false;
   var list = pendingQueens();
   if (!list || !list.length) return false;
 

@@ -307,7 +307,6 @@ export function applyBoard(n, regions, solution, seed, preVibe, rules) {
    * 一律清掉（按钮随之回到「记录」）。 */
   state.snap = null;
   state.conflicts = { pairs: [], cells: new Set(), count: 0 };
-  state.forced = null;
   // 记下这盘实际用到的难度档，用来判断设置面板里选的东西「是否还没生效」
   state.diffApplied = settings.difficulty;
   /* 挑战：限时从这一局的第一笔操作起算（新局 / 重试都把起算点归零）；
@@ -322,6 +321,11 @@ export function applyBoard(n, regions, solution, seed, preVibe, rules) {
   state.noHint = r ? !!r.noHint : !!settings.noHint;
   state.noUndo = r ? !!r.noUndo : !!settings.noUndo;
   state.noSnap = r ? !!r.noSnap : !!settings.noSnap;
+  /* 三个「辅助」：每日挑战按挡位关（较难关补齐、困难再关自动 ×、极难连定位也关），
+   * 自定义照设置抄。0 / 缺字段都算「开着」——老存档与分享码里没有这几项。 */
+  state.autoMark = r ? r.autoMark !== false : settings.autoMark !== false;
+  state.forced = r ? r.forced !== false : settings.forced !== false;
+  state.autoFill = r ? r.autoFill !== false : settings.autoFill !== false;
   state.daily = r && r.daily ? r.daily : null;
   /* 首通快照：起局那一刻这一挡今天完成过没有。之后解开时 markDaily 会把
    * isDone 翻成 true，结果层靠这份快照分「头一回解开」（送一次抽奖）和
@@ -369,6 +373,9 @@ export function retryGame() {
     noHint: state.noHint,
     noUndo: state.noUndo,
     noSnap: state.noSnap,
+    autoMark: state.autoMark,
+    forced: state.forced,
+    autoFill: state.autoFill,
     daily: state.daily
   } : null;
   applyBoard(state.size, state.regions, state.solution, state.seed, state.vibe, rules);

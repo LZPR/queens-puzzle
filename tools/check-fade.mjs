@@ -97,9 +97,9 @@ ok('标题与说明写清了 0.5 秒', /淡化 ×/.test(ui.mark.text) && /0\.5 �
 ok('文案不点名具体外观（以后加新外观不用改字）',
   !/(小猫|圆点|「点」|叉的样式)/.test(ui.mark.text + ui.queen.text) && /外观/.test(ui.queen.text),
   `${ui.mark.text} / ${ui.queen.text}`);
-ok('两个淡化开关挨在一起（自动打叉 / 拖动对齐之后）',
-  ui.order.indexOf('swFadeMark') === ui.order.indexOf('swAlignDrag') + 1 &&
-  ui.order.indexOf('swFadeQueen') === ui.order.indexOf('swAlignDrag') + 2,
+ok('两个淡化开关挨在一起（拖动对齐 / 只标同色之后）',
+  ui.order.indexOf('swFadeMark') === ui.order.indexOf('swSameColor') + 1 &&
+  ui.order.indexOf('swFadeQueen') === ui.order.indexOf('swSameColor') + 2,
   ui.order.join(','));
 await page.screenshot({ path: SHOTS + '22-fade-sheet.png' });
 

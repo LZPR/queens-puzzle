@@ -82,17 +82,14 @@ const tap = async (i, { dbl = false, gap = 90 } = {}) => {
   await sleep(220);
 };
 
-// 自动打叉的开关只剩设置面板里一处（顶栏那颗按钮已换成「外观」），
-// 所以就着这个面板来回切，顺手把「面板开着时棋盘不动」一并验了。
-// 设置面板现在是一整列摊开的开关，没有折叠。
+// 自动打 × 是这一局的规矩（state.autoMark），只能在「开一局新的」时选，
+// 中途改不了——测试里直接拨运行时那一把（渲染只认 state）。
 const setAutoMark = async (want) => {
-  const open = await page.evaluate(() => !document.getElementById('sheetWrap').hidden);
-  if (!open) { await page.click('#btnSettings'); await sleep(420); }
-  const cur = await page.evaluate(() =>
-    document.getElementById('swAuto').getAttribute('aria-checked') === 'true');
-  if (cur !== want) { await page.click('#swAuto'); await sleep(300); }
-  await page.click('#btnCloseSheet');
-  await sleep(320);
+  await page.evaluate((v) => {
+    __QUEENS_DEBUG__.state.autoMark = v;
+    __QUEENS_DEBUG__.render(false);
+  }, want);
+  await sleep(120);
 };
 
 await tap(0);
@@ -153,6 +150,21 @@ check('自动 × 点不出手标', autoLock.mark === 0 && autoLock.stillAuto, `m
 check('提示解释了不能改', /自动/.test(autoLock.hint), autoLock.hint);
 await sleep(420);
 
+/* 自动打的 × 上连「双击硬塞一颗皇后」也不行（2026-10-29 的规矩）：
+ * 那一格是推理出来的死格，塞进去等于把推导推翻。 */
+const autoDbl = await page.evaluate(async (i) => {
+  const d = __QUEENS_DEBUG__;
+  d.state.lastTap = null;
+  const before = [...d.state.marks].filter(m => m === 2).length;
+  const cells = document.querySelectorAll('.cell');
+  cells[i].click();
+  cells[i].click();     // 340ms 内两下 = 双击
+  return { mark: d.state.marks[i], queens: [...d.state.marks].filter(m => m === 2).length - before };
+}, autoIdx);
+check('自动 × 上双击也放不了皇后', autoDbl.mark === 0 && autoDbl.queens === 0,
+  `mark=${autoDbl.mark} 新增皇后=${autoDbl.queens}`);
+await sleep(420);
+
 // ---------- 4b. 自动打叉（设置面板里的开关）+ 自动/手动 × 同款 ----------
 // 顶栏那颗按钮换成了「外观」，自动打叉只剩设置面板里这一个入口
 const freeIdx = await page.evaluate(() => [...document.querySelectorAll('.cell')]
@@ -184,30 +196,30 @@ check('自动 × 与手动 × 样式一致', parity.same, `auto=${parity.a} manu
 check('顶栏不再有自动打叉按钮（换成外观）', await page.evaluate(() =>
   !document.getElementById('btnAuto') && !!document.getElementById('btnLook')));
 
-await page.click('#btnSettings');
-await sleep(420);
-await page.click('#swAuto');
-await sleep(300);
-const autoOff = await page.evaluate(() => ({
-  on: __QUEENS_DEBUG__.settings.autoMark,
-  cells: document.querySelectorAll('.cell.is-auto').length,
-  checked: document.getElementById('swAuto').getAttribute('aria-checked')
-}));
-check('设置里可关闭自动打叉', autoOff.on === false && autoOff.cells === 0 && autoOff.checked === 'false',
-  `on=${autoOff.on} cells=${autoOff.cells}`);
+// 自动打 × 现在是**这一局的规矩**（state.autoMark，2026-10-29 从设置搬到换一局
+// 面板的挑战组）：开着才画自动 ×，关掉整盘不画。直接拨运行时那一把，等价于
+// 「开这局时它就是关的」——渲染只认 state，不看 settings。
+const autoOff = await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.state.autoMark = false;
+  d.render(false);
+  return {
+    on: d.state.autoMark,
+    cells: document.querySelectorAll('.cell.is-auto').length,
+    settingsUntouched: d.settings.autoMark
+  };
+});
+check('关掉这一局的自动打叉后棋盘不再画自动 ×',
+  autoOff.on === false && autoOff.cells === 0 && autoOff.settingsUntouched === true,
+  `on=${autoOff.on} cells=${autoOff.cells} settings=${autoOff.settingsUntouched}`);
 
-await page.click('#swAuto');
-await sleep(300);
-const autoOn = await page.evaluate(() => ({
-  on: __QUEENS_DEBUG__.settings.autoMark,
-  cells: document.querySelectorAll('.cell.is-auto').length,
-  checked: document.getElementById('swAuto').getAttribute('aria-checked'),
-  saved: JSON.parse(localStorage.getItem('queens.settings.v1') || '{}').autoMark
-}));
-check('再点一次恢复自动打叉', autoOn.on === true && autoOn.cells > 0 && autoOn.checked === 'true',
-  `cells=${autoOn.cells} saved=${autoOn.saved}`);
-await page.click('#btnCloseSheet');
-await sleep(320);
+const autoOn = await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.state.autoMark = true;
+  d.render(false);
+  return { on: d.state.autoMark, cells: document.querySelectorAll('.cell.is-auto').length };
+});
+check('再打开就恢复自动打叉', autoOn.on === true && autoOn.cells > 0, `cells=${autoOn.cells}`);
 // 细线：每格都带 inset 阴影，最右列/最下行不重复补线
 const grid = await page.evaluate(() => {
   const all = [...document.querySelectorAll('.cell')];
@@ -225,9 +237,11 @@ check('每格有细分隔线', grid.hasHair, grid.mid);
 check('棋盘右下角不叠双线', grid.cornerNone, `corner=${grid.corner}`);
 
 // ---------- 5. 冲突高亮 ----------
-// 在同一行的另一列落第二只皇后 → 必然同行冲突
+// 自动 × 现在挡住「放下去就冲突」的所有格子（同行 / 同列 / 相邻 / 同色块），
+// 所以要看冲突先得把这一局的自动打叉关掉 —— 每日挑战的困难以上就是这种局。
 const nC = await page.evaluate(() => __QUEENS_DEBUG__.state.size);
 const conflictCell = Math.floor(q0 / nC) * nC + ((q0 % nC) + 1) % nC;  // 同行另一列，必定冲突
+await setAutoMark(false);
 await tap(conflictCell, { dbl: true });
 const conf = await page.evaluate(() => {
   const d = __QUEENS_DEBUG__;
@@ -251,6 +265,7 @@ await page.click('#btnUndo');
 await sleep(250);
 s = await page.evaluate(() => ({ q: __QUEENS_DEBUG__.state.marks.filter(m => m === 2).length, conf: __QUEENS_DEBUG__.state.conflicts.count }));
 check('撤销回到 1 只皇后', s.q === 1 && s.conf === 0, `q=${s.q} conf=${s.conf}`);
+await setAutoMark(true);   // 回到默认那一局（后面的自动 × 相关断言要用）
 
 // ---------- 7. 提示（现在是分步引导，不再直接给答案） ----------
 await page.click('#btnHint');
@@ -326,6 +341,31 @@ check('竖向拖涂连成整列', mk.length === 8 && mk.every(o => o.c === 7), s
 
 await drag([7, 7], [0, 7], 8);   // 从本列的 × 起手 → 沿同列擦除
 check('同列反向拖擦干净', (await marksAt()).length === 0, `marks=${(await marksAt()).length}`);
+
+/* 「拖动只标同色」（设置里那颗，默认关）：起手那一格的颜色决定这一笔能涂到哪儿，
+ * 划进隔壁色块就停手。拨开验一遍，验完再关回去——后面的断言按默认手感来。 */
+const sameInfo = await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__, n = d.state.size;
+  const g0 = d.state.regions[0];
+  let edge = n;
+  for (let c = 1; c < n; c++) if (d.state.regions[c] !== g0) { edge = c; break; }
+  d.settings.dragSameColor = true;
+  return { n, g0, edge: Math.min(n - 1, edge + 1) };
+});
+await drag([0, 0], [0, sameInfo.edge], 8);
+const sameMarks = await page.evaluate((g0) => {
+  const d = __QUEENS_DEBUG__, n = d.state.size;
+  return [...d.state.marks]
+    .map((m, i) => m === 1 ? { i, r: (i / n) | 0, c: i % n, g: d.state.regions[i] } : null)
+    .filter(Boolean)
+    .map(o => Object.assign(o, { ok: o.g === g0 }));
+}, sameInfo.g0);
+check('只标同色：划进别的色块就停手',
+  sameMarks.length > 0 && sameMarks.every(o => o.ok && o.r === 0),
+  `edge=${sameInfo.edge} ${sameMarks.map(o => o.r + ',' + o.c + (o.ok ? '' : '(异色)')).join(' ')}`);
+await page.evaluate(() => { __QUEENS_DEBUG__.settings.dragSameColor = false; });
+await page.click('#btnUndo');
+await sleep(260);
 
 // ---------- 8c. 唯一位置提示 ----------
 const nF = await page.evaluate(() => __QUEENS_DEBUG__.state.size);
@@ -454,7 +494,7 @@ const noMark = await page.evaluate(() => {
   for (let i = 0; i < n * n; i++) area[d.state.regions[i]] = (area[d.state.regions[i]] || 0) + 1;
   const forced = [...document.querySelectorAll('.cell.is-forced')].map(e => +e.dataset.i);
   return {
-    on: d.settings.autoMark,
+    on: d.state.autoMark,
     auto: document.querySelectorAll('.cell.is-auto').length,
     x: document.querySelectorAll('.cell.is-x').length,
     forced: forced.length,
@@ -492,35 +532,30 @@ await page.evaluate(() => {
 });
 await setAutoMark(true);
 const restored = await page.evaluate(() => ({
-  on: __QUEENS_DEBUG__.settings.autoMark,
+  on: __QUEENS_DEBUG__.state.autoMark,
   forced: document.querySelectorAll('.cell.is-forced').length
 }));
 check('恢复自动打叉后提示回到 1 格', restored.on === true && restored.forced === 1,
   `on=${restored.on} forced=${restored.forced}`);
 
-await page.click('#btnSettings');
-await sleep(420);
-await page.click('#swForced');
-await sleep(260);
-const forcedOff = await page.evaluate(() => ({
-  on: __QUEENS_DEBUG__.settings.forced,
-  cells: document.querySelectorAll('.cell.is-forced').length,
-  aria: document.getElementById('swForced').getAttribute('aria-checked')
-}));
-check('可关闭唯一位置提示', forcedOff.on === false && forcedOff.cells === 0 && forcedOff.aria === 'false',
+/* 唯一位置提示也是这一局的规矩（state.forced，2026-10-29 从设置搬进挑战组）：
+ * 关掉整盘不再亮「只剩这一格」，打开又回来。 */
+const forcedOff = await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.state.forced = false;
+  d.render(false);
+  return { on: d.state.forced, cells: document.querySelectorAll('.cell.is-forced').length };
+});
+check('关掉唯一位置提示后不再亮', forcedOff.on === false && forcedOff.cells === 0,
   `cells=${forcedOff.cells}`);
 
-await page.click('#swForced');
-await sleep(260);
-const forcedOn = await page.evaluate(() => ({
-  on: __QUEENS_DEBUG__.settings.forced,
-  cells: document.querySelectorAll('.cell.is-forced').length,
-  saved: JSON.parse(localStorage.getItem('queens.settings.v1') || '{}').forced
-}));
-check('再打开恢复提示', forcedOn.on === true && forcedOn.cells === 1 && forcedOn.saved === true,
-  `cells=${forcedOn.cells} saved=${forcedOn.saved}`);
-await page.click('#btnCloseSheet');
-await sleep(420);
+const forcedOn = await page.evaluate(() => {
+  const d = __QUEENS_DEBUG__;
+  d.state.forced = true;
+  d.render(false);
+  return { on: d.state.forced, cells: document.querySelectorAll('.cell.is-forced').length };
+});
+check('再打开恢复提示', forcedOn.on === true && forcedOn.cells === 1, `cells=${forcedOn.cells}`);
 
 // ---------- 9. 完整解盘 → 胜利 ----------
 const placed = await page.evaluate(() => {
@@ -567,10 +602,11 @@ const sheet = await page.evaluate(() => {
 });
 check('设置面板打开', sheet.open, `inView=${sheet.inView}`);
 check('设置面板完整可见', sheet.inView);
-// 九个偏好开关：自动打叉 / 拖动对齐 / 淡化 × / 淡化皇后 / 模糊背景 / 冲突 /
-// 唯一位置 / 音效 / 震动。
-// 挑战那两颗跟着「开一局新的」搬去了换一局面板，分享搬去了信息页。
-check('设置面板是 9 个开关', sheet.sw === 9, `sw=${sheet.sw}`);
+// 八个偏好开关：拖动对齐 / 拖动只标同色 / 淡化 × / 淡化皇后 / 模糊背景 /
+// 冲突 / 音效 / 震动。
+// 自动打叉与唯一位置提示跟着另外三颗挑战开关搬去了换一局面板（它们现在是
+// 「这一局的规矩」，不是「拨了立刻生效」的偏好），分享搬去了信息页。
+check('设置面板是 8 个开关', sheet.sw === 8, `sw=${sheet.sw}`);
 check('设置面板不再折叠、也没有分享', sheet.more === false && sheet.share === false);
 check('设置面板一屏放得下', !sheet.scrollable);
 await page.screenshot({ path: `${OUT}/06-settings.png` });
@@ -590,6 +626,7 @@ const newUi = await page.evaluate(() => {
     sizeVal: document.getElementById('sizeVal').textContent.trim(),
     limit: sh.querySelectorAll('#limitOpts .lbtn').length,
     step: sh.querySelectorAll('#stepOpts .lbtn').length,
+    challengeSwitches: sh.querySelectorAll('.challenge .switch').length,
     shuffle: !!document.getElementById('btnShuffle'),
     share: !!sh.querySelector('.share')
   };
@@ -599,6 +636,26 @@ check('换一局面板完整可见', newUi.inView);
 check('换一局面板有快捷尺寸', newUi.quick >= 5, `quick=${newUi.quick}`);
 check('换一局面板带着挑战挡位', newUi.limit === 6 && newUi.step === 6, `${newUi.limit}/${newUi.step}`);
 check('换一局面板底部是「换一局」且没有分享', newUi.shuffle && !newUi.share);
+// 挑战组六颗开关：自动标 × / 唯一位置提示 / 自动补全 + 禁用提示 / 撤销 / 记录点。
+// 前两颗是从设置面板搬过来的（它们成了「这一局的规矩」），自动补全是新分出来的一颗。
+check('挑战组有六颗开关（含三颗辅助）', newUi.challengeSwitches === 6, `sw=${newUi.challengeSwitches}`);
+
+const auxToggle = await page.evaluate(() => {
+  const sw = document.getElementById('swAutoMark');
+  const before = sw.getAttribute('aria-checked');
+  sw.click();
+  const off = {
+    checked: sw.getAttribute('aria-checked'),
+    title: document.getElementById('challengeTitle').textContent.trim(),
+    stateUntouched: __QUEENS_DEBUG__.state.autoMark
+  };
+  sw.click();
+  return { before, off, back: sw.getAttribute('aria-checked') };
+});
+check('拨辅助开关只记「待换一局生效」',
+  auxToggle.before === 'true' && auxToggle.off.checked === 'false' &&
+  /待换一局生效/.test(auxToggle.off.title) && auxToggle.off.stateUntouched === true,
+  `${auxToggle.off.checked} / ${auxToggle.off.title}`);
 await page.screenshot({ path: `${OUT}/06b-newgame.png` });
 
 // ---------- 11. 改尺寸到 12 ----------

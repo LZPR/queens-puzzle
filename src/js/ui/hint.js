@@ -81,8 +81,9 @@ export function updateHint() {
   }
 
   /* 只剩皇后没标：这一行让给「补齐」，其他文案都不用说了。
-   * 挑战里禁用提示时不给这条路——那档挑战的意思就是「全自己来」。 */
-  var rest = state.noHint ? null : pendingQueens();
+   * 「补齐」是单独一把开关（state.autoFill）：禁用提示只管提示，不再连带把
+   * 这条捷径一起收掉——两件事在挑战里各占一颗开关。 */
+  var rest = state.autoFill ? pendingQueens() : null;
   setNudge(rest ? rest.length : 0);
   if (rest) return;
 

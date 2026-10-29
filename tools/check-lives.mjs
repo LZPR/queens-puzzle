@@ -163,7 +163,9 @@ let ui = await page.evaluate(() => {
     scrolls: sh.scrollHeight > sh.clientHeight + 4,
     overflowX: sh.scrollWidth - sh.clientWidth,
     switches: sh.querySelectorAll('.switch').length,
-    aboveShuffle: ch.getBoundingClientRect().bottom <= sh.querySelector('.shuffle-row').getBoundingClientRect().top + 1,
+    // 挑战组在「换一局」之前（按文档顺序；那颗按钮现在粘在下沿，几何位置不可靠）
+    aboveShuffle: !!(ch.compareDocumentPosition(sh.querySelector('.shuffle-row')) &
+      Node.DOCUMENT_POSITION_FOLLOWING),
     // 三排挡位都在挑战组里
     rows: ch.querySelectorAll('.limit-row').length,
     title: document.getElementById('challengeTitle').textContent.trim()
@@ -173,7 +175,8 @@ ok('标错惩罚有五档：不惩罚 / 1 / 3 / 5 / 8',
   ui.labels.join() === '不惩罚,1 条,3 条,5 条,8 条', ui.labels);
 ok('默认是「不惩罚」', ui.on.length === 1 && ui.on[0] === '不惩罚', ui.on);
 ok('默认说明是「会扣一条命，扣光判负」', /扣一条命/.test(ui.hint), ui.hint);
-ok('挑战组里现在是三排挡位 + 三颗开关', ui.rows === 3 && ui.switches === 3, `${ui.rows}/${ui.switches}`);
+// 六颗开关：自动标 × / 唯一位置提示 / 自动补全 + 禁用提示 / 撤销 / 记录点
+ok('挑战组里现在是三排挡位 + 六颗开关', ui.rows === 3 && ui.switches === 6, `${ui.rows}/${ui.switches}`);
 ok('挑战组仍在「换一局」上面', ui.aboveShuffle);
 ok('加了这一排之后面板仍然一屏装得下（不滚）', ui.inView && !ui.scrolls, `${ui.inView}/${ui.scrolls}`);
 ok('面板不横向溢出', ui.overflowX <= 0, ui.overflowX);
