@@ -19,6 +19,7 @@ import { closeGuide } from './guide.js';
 import { updateHint } from './hint.js';
 import { showResult } from './panels/result.js';
 import { updateStats } from './render.js';
+import { afterWinLook, playLookEffect } from '../looks/effects.js';
 
 /* ==========================================================
    胜利
@@ -49,15 +50,15 @@ export function checkWin() {
     view.cells[i].style.setProperty('--win-delay', ((r + c) * 36) + 'ms');
   }
 
-  burstConfetti();
-
   save();
   recordFinish(true);
 
-  window.setTimeout(function () {
-    if (state.status !== 'won') return;
-    showResult();
-  }, REDUCE_MOTION ? 200 : 900);
+  afterWinLook(function (current) {
+    burstConfetti();
+    window.setTimeout(function () {
+      if (current()) showResult();
+    }, REDUCE_MOTION ? 200 : 900);
+  });
 }
 
 /* ==========================================================
@@ -161,6 +162,7 @@ export function failByLives() { failGame('lives'); }
 
 export function burstConfetti() {
   if (REDUCE_MOTION) return;
+  if (playLookEffect('confetti').handled) return;
   var rect = boardEl.getBoundingClientRect();
   var colors = ['#FFD93D', '#FF6B6B', '#4FC46F', '#5B9DFF', '#A06BE8', '#FFFFFF'];
   for (var i = 0; i < 34; i++) {

@@ -157,6 +157,9 @@ export var DEFAULT_SETTINGS = {
   markStyle: DEFAULT_LOOK.mark,
   pieceStyle: DEFAULT_LOOK.piece,
   lifeStyle: DEFAULT_LOOK.life,
+  dealStyle: DEFAULT_LOOK.deal,
+  revealStyle: DEFAULT_LOOK.reveal,
+  confettiStyle: DEFAULT_LOOK.confetti,
   /* 淡化（即时生效）：填过的格子退到后面去，别跟空格抢眼睛。
    * 默认都关着——淡下去以后「这格处理过了」的分量也跟着没了，
    * 想要安静的棋盘再自己开。 */

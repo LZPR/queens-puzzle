@@ -1,0 +1,88 @@
+/* 卡片本体保留 3D 层级；裁切、混合与滤镜只放到独立的内部图层。 */
+.poke-scene { position: relative; width: 100%; aspect-ratio: 5 / 7; perspective: 850px; }
+.poke-card {
+  --tilt-x: 0deg; --tilt-y: 0deg; --parallax-x: 0px; --parallax-y: 0px;
+  --glare-x: 40%; --glare-y: 30%; --foil-angle: 125deg;
+  position: absolute; inset: 0; border-radius: 7%; transform-style: preserve-3d;
+  transform: rotateX(var(--tilt-y)) rotateY(var(--tilt-x));
+  transition: transform .12s ease-out; touch-action: none; user-select: none; cursor: grab;
+  color: #fcf6ff; font-family: inherit; outline-offset: 9px;
+}
+.poke-card.is-dragging { cursor: grabbing; transition: none; }
+.poke-card-base {
+  position: absolute; inset: 0; border-radius: inherit;
+  background: conic-gradient(from var(--foil-angle), #8cf8de, #a7bcff, #edb9ff, #fff2b1, #a2eaff, #8cf8de);
+  box-shadow: 0 10px 30px #070c2b77, 0 0 0 1px #ffffffbb, inset 0 0 0 2px #ffffff55;
+}
+.poke-card-world {
+  position: absolute; inset: 2.4%; border-radius: 5%; overflow: hidden;
+  background: radial-gradient(ellipse at 45% 36%, var(--poke-color), transparent 62%), linear-gradient(155deg, var(--poke-night), #151b37 85%);
+  transform: translateZ(1px);
+}
+.poke-card-world::before {
+  content: ''; position: absolute; inset: 0; opacity: .65;
+  background-image: radial-gradient(circle, #fff 1px, transparent 1.5px), radial-gradient(circle, #fff9b5 1px, transparent 2px);
+  background-size: 31px 43px, 57px 67px; background-position: 2px 8px, 20px 25px;
+}
+.poke-card-world i { position: absolute; width: 110%; height: 80%; border: 1px solid #ffffff33; border-radius: 50%; left: -5%; top: 8%; transform: rotate(-25deg); }
+.poke-card-world i:nth-child(2) { transform: rotate(25deg) scale(.8); }
+.poke-card-world i:nth-child(3) { transform: rotate(60deg) scale(1.1); }
+.poke-card-orbit {
+  position: absolute; inset: 20% 12% 28%; border: 1px solid #fff9; border-radius: 50%;
+  box-shadow: 0 0 30px var(--poke-color), inset 0 0 22px #ffffff33;
+  transform: translateZ(12px) translate(calc(var(--parallax-x) * -.4), calc(var(--parallax-y) * -.4));
+}
+.poke-card-foil, .poke-card-glare { position: absolute; inset: 2.4%; border-radius: 5%; pointer-events: none; }
+.poke-card-foil {
+  background: repeating-linear-gradient(var(--foil-angle), #f7f39c55 0%, #8cf8dc44 12%, #b4b6ff66 22%, #f8afe944 32%, #f7f39c55 42%);
+  background-size: 220% 220%; background-position: var(--glare-x) var(--glare-y); mix-blend-mode: color-dodge;
+  opacity: .55; transform: translateZ(2px);
+}
+.poke-card-art {
+  position: absolute; left: 0; top: 13%; width: 100%; height: 64%; object-fit: contain;
+  transform: translate3d(var(--parallax-x), var(--parallax-y), 58px);
+  filter: drop-shadow(0 12px 8px #060c2c77); pointer-events: none;
+}
+.poke-card-heading, .poke-card-name, .poke-card-foot { position: absolute; left: 9%; right: 9%; transform: translateZ(28px); text-shadow: 0 1px 4px #171c40; }
+.poke-card-heading { top: 7%; display: flex; justify-content: space-between; gap: 3px; font-size: clamp(8px, 2vw, 11px); letter-spacing: .7px; }
+.poke-card-heading b { font-size: inherit; }
+.poke-card-name { bottom: 11%; text-align: center; display: grid; gap: 3px; }
+.poke-card-name b { font-size: clamp(15px, 4vw, 23px); letter-spacing: 3px; }
+.poke-card-name span { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .8; }
+.poke-card-foot { bottom: 5%; display: flex; justify-content: space-between; font-size: 6px; letter-spacing: .7px; }
+.poke-card-foot b { font-size: 8px; color: #f7e7ac; }
+.poke-card-glare {
+  background: radial-gradient(circle at var(--glare-x) var(--glare-y), #ffffff88, #ffffff08 40%, transparent 65%);
+  opacity: .7; mix-blend-mode: screen; transform: translateZ(63px);
+}
+.look-tiles.is-reward.poke-reward { display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 40%, #555579, #171b30 75%); }
+.poke-reward > .poke-scene { width: 60%; margin-bottom: 6%; }
+.poke-reward-caption { position: absolute; bottom: 2%; left: 5%; right: 5%; border: 0; background: none; color: #e5d8f8; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; padding: 5px; }
+.poke-album-opener { position: relative; }
+.poke-count { position: absolute; right: -5px; top: -5px; min-width: 14px; height: 14px; padding: 0 2px; display: grid; place-items: center; border-radius: 10px; background: #e4c75c; color: #302d3c; border: 1px solid var(--ink); font-size: 8px; font-weight: 900; }
+.poke-album { max-width: 640px; }
+.poke-kicker { margin: 0 0 3px; font-size: 9px; letter-spacing: 2px; color: var(--ink-faint); }
+.poke-progress { font-size: 18px; font-weight: 900; margin: 15px 0 6px; }
+.poke-filters { display: flex; gap: 8px; margin: 12px 0 16px; }
+.poke-filters button { padding: 7px 12px; border: 1px solid var(--ink); border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer; font: inherit; font-size: 11px; }
+.poke-filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg-body); }
+.poke-album-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; }
+.poke-slot { border: 1px solid #47405c33; border-radius: 12px; padding: 8px 7px; min-width: 0; background: #ede7dc; color: var(--ink); cursor: pointer; font: inherit; }
+.poke-slot .poke-scene { pointer-events: none; }
+.poke-slot .poke-card { cursor: inherit; }
+.poke-slot .poke-card-heading { font-size: 5px; }
+.poke-slot .poke-card-name b { font-size: 9px; letter-spacing: 0; }
+.poke-slot .poke-card-name span, .poke-slot .poke-card-foot { display: none; }
+.poke-slot-label { display: block; margin-top: 8px; font-size: 10px; font-weight: 800; text-align: center; }
+.poke-slot:disabled { cursor: default; opacity: .6; }
+.poke-unknown { aspect-ratio: 5 / 7; display: grid; place-items: center; color: #b4abb3; font-size: 34px; border: 1px dashed #c5bac6; border-radius: 9px; background: repeating-linear-gradient(140deg, #e0d8d9 0 2px, #e8e1df 2px 12px); }
+.poke-empty { grid-column: 1 / -1; padding: 30px 10px; color: var(--ink-faint); text-align: center; }
+.poke-detail { padding: 0 5px 12px; }
+.poke-detail h3 { text-align: center; font-size: 14px; margin: 8px 0 26px; }
+.poke-detail > .poke-scene { width: min(66vw, 280px); margin: 0 auto; }
+.poke-angle-hint { color: var(--ink-faint); text-align: center; font-size: 10px; margin: 26px 0 6px; }
+.poke-credit { font-size: 9px; color: var(--ink-faint); margin-top: 20px; line-height: 1.7; }
+.poke-credit a { color: inherit; }
+.poke-result-link { margin: 0 auto 12px; display: block; color: #6c4aa0; font-size: 12px; }
+@media (min-width: 600px) { .poke-album-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { .poke-card { transition: none; } }

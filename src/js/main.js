@@ -33,6 +33,7 @@ import { render, updateStats } from './ui/render.js';
 import { takeHashCode, tryLoadShare } from './ui/share.js';
 import { traceCells } from './ui/trace.js';
 import { checkLives, checkSteps, checkTimeout } from './ui/win.js';
+import { playBoardLook } from './looks/effects.js';
 
 /* 浮层先挂上：markup 进 #sheets，各面板的元素引用与事件在这一步接好。
  * 必须早于 boot()——外观面板要按面板里的展位建按钮，applyLook 靠它。 */
@@ -86,6 +87,7 @@ function boot() {
     applyFadeNow();
     updateStats();
     updateDiffChip();
+    playBoardLook(true);
 
     if (state.status === 'won') {
       showResult();

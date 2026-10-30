@@ -92,7 +92,8 @@ ok('开箱就是几何图案', bar.look.surface === 'geo' && bar.attr === 'geo',
 // ---------- 2. 展柜面板 ----------
 console.log('\n--- 展柜面板 ---');
 await openLook();
-const ui = await page.evaluate(() => {
+const ui = await page.evaluate(async () => {
+  const { KINDS, DEFAULT_LOOK, listOf } = await import('/src/js/looks/index.js');
   const rows = {
     surface: [...document.querySelectorAll('#surfaceRow .showcase')],
     mark: [...document.querySelectorAll('#markRow .showcase')],
@@ -108,7 +109,9 @@ const ui = await page.evaluate(() => {
     markIds: rows.mark.map(b => b.dataset.mark),
     pieceIds: rows.piece.map(b => b.dataset.piece),
     lifeIds: rows.life.map(b => b.dataset.life),
-    checked: on.map(b => b.dataset.surface || b.dataset.mark || b.dataset.piece || b.dataset.life),
+    checked: on.map(b => KINDS.map(k => b.dataset[k]).find(Boolean)),
+    expectedChecked: KINDS.map(k => DEFAULT_LOOK[k]),
+    expectedPlates: KINDS.flatMap(k => listOf(k).map(o => o.name)),
     plugins: rows.surface.map(b => b.dataset.plugin),
     // 一排里跨了几个插件 → 才挂插件小标签
     srcs: rows.surface.map(b => (b.querySelector('.sc-src') || {}).textContent || ''),
@@ -141,8 +144,8 @@ ok('色块的展位有五套：几何 / 自然 / 天空 / 贴纸 / 纯色',
 ok('叉的展位有两个：叉 / 点', ui.markIds.join() === 'x,dot', ui.markIds);
 ok('皇后的展位有两个：皇后 / 小猫', ui.pieceIds.join() === 'queen,cat', ui.pieceIds);
 ok('生命的展位有两个：红心 / 血条', ui.lifeIds.join() === 'heart,bar', ui.lifeIds);
-ok('默认选中几何 + 叉 + 皇后 + 红心',
-  ui.checked.join() === 'geo,x,queen,heart', ui.checked);
+ok('各类外观按插件登记选择默认项',
+  ui.checked.join() === ui.expectedChecked.join(), ui.checked);
 ok('每个展位都记得自己出自哪个插件',
   ui.plugins.join() === 'geometry,nature,sky,sticker,classic', ui.plugins);
 ok('插件名和样式名一样时不挂小标签，只有「纯色」挂「墨线」',
@@ -150,7 +153,7 @@ ok('插件名和样式名一样时不挂小标签，只有「纯色」挂「墨�
 ok('单插件的排不挂插件标签', ui.markSrcs.every(v => v === false));
 ok('展位有玻璃罩 / 顶灯 / 台面 / 反光 / 名牌 / 勾', ui.parts.every(Boolean), ui.parts);
 ok('名牌只写名字，没有描述',
-  ui.plates.join() === '几何,自然,天空,贴纸,纯色,叉,点,皇后,小猫,红心,血条',
+  ui.plates.join() === ui.expectedPlates.join(),
   ui.plates.join());
 ok('标题写着当前用的样式',
   /几何/.test(ui.nows[0]) && /叉/.test(ui.nows[1]) && /皇后/.test(ui.nows[2]),

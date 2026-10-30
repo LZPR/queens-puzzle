@@ -21,6 +21,7 @@ import { render, resetBad, updateStats } from '../ui/render.js';
 import { clearTrace } from '../ui/trace.js';
 import { closeSheet, isOpen } from '../core/sheet.js';
 import { dismissMismatch, showMismatch } from '../ui/panels/mismatch.js';
+import { cancelBoardLooks, prepareBoardLook, playBoardLook } from '../looks/effects.js';
 
 /* ==========================================================
    新一局
@@ -186,6 +187,7 @@ export function lastRoll() { return lastRollInfo; }
  * tried 是「这次换局之前已经抽掉多少张」——再抽时累加上去，
  * 好让那一层照实说「13×13 找了 3.0 秒、抽了 26 张」。 */
 function roll(n, band, tried) {
+  cancelBoardLooks(true);
   if (isOpen('result')) closeSheet('result', { force: true });
   dismissMismatch();
   boardEl.classList.remove('is-won', 'is-lost');
@@ -264,6 +266,7 @@ function roll(n, band, tried) {
  * 之所以要把 noHint / noUndo / noSnap 也收进 state：那三样以前直接读 settings，
  * 每日挑战一开就会把玩家的设置顶掉。 */
 export function applyBoard(n, regions, solution, seed, preVibe, rules) {
+  prepareBoardLook();
   if (isOpen('result')) closeSheet('result', { force: true });
   dismissMismatch();   // 真装上了，那张「不够格」的卡就不该还挂着
   /* 手上这一盘由别人（分享码 / 存档 / 重试 / 每日挑战）拍板了：还在抽的那一轮立刻作废，
@@ -337,6 +340,7 @@ export function applyBoard(n, regions, solution, seed, preVibe, rules) {
   hideVeil();
   updateStats();
   updateDiffChip();
+  playBoardLook();
   save();
 }
 
@@ -373,6 +377,7 @@ export function newDaily(tier) {
   var day = dayKey();
   var band = DIFF_BANDS[tier];
 
+  cancelBoardLooks(true);
   if (isOpen('result')) closeSheet('result', { force: true });
   dismissMismatch();
   boardEl.classList.remove('is-won', 'is-lost');

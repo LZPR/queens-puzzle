@@ -2,7 +2,7 @@
  * looks/index.js
  * 外观插件登记处。
  * ----------------------------------------------------------------------------
- * 外观（色块图案 / 叉 / 皇后 / 生命）不再写死在 core/config.js 里，而是一批插件：
+ * 外观（色块图案 / 叉 / 皇后 / 生命 / 开局 / 通关 / 礼炮）由一批插件提供：
  * `src/js/looks/` 下每个文件导出一个插件，一个插件可以只提供一样东西，
  * 也可以几样都给。面板（ui/panels/look.js）按这里登记的顺序现场生成展柜，
  * 棋盘（game/skin.js、game/board.js）按存档里的 id 去取画法。
@@ -16,7 +16,11 @@
  *     surfaces: [ ... ],    // 色块：可以没有
  *     marks:    [ ... ],    // 叉：可以没有
  *     pieces:   [ ... ],    // 皇后：可以没有
- *     lifes:    [ ... ]     // 生命：可以没有（键名按 `<名字>s` 的规矩，所以是 lifes）
+ *     lifes:    [ ... ],    // 生命：可以没有（键名按 `<名字>s` 的规矩，所以是 lifes）
+ *     deals:    [ ... ],    // 开局动画：可以没有
+ *     reveals:  [ ... ],    // 通关画面：可以没有
+ *     confettis:[ ... ],    // 礼炮：可以没有
+ *     stylesheet: '...'     // 插件自己的 CSS URL：可以没有
  *   };
  *
  * 几类样式各自的字段：
@@ -52,32 +56,39 @@ import life from './life.js';
 import nature from './nature.js';
 import sky from './sky.js';
 import sticker from './sticker.js';
+import transitions from './transitions.js';
+import pokemon from './pokemon.js';
+import originalEffects from './original-effects.js';
+import celebration from './celebration.js';
 
-/* 四类外观。key 是它存在 settings 里的字段，attr 是落到 <html> 上的钩子。 */
+/* 外观类别。key 是它存在 settings 里的字段，attr 是落到 <html> 上的钩子。 */
 export var KIND = {
   surface: { key: 'surfaceStyle', attr: 'data-surface', label: '色块' },
   mark: { key: 'markStyle', attr: 'data-mark', label: '叉' },
   piece: { key: 'pieceStyle', attr: 'data-piece', label: '皇后' },
-  life: { key: 'lifeStyle', attr: 'data-life', label: '生命' }
+  life: { key: 'lifeStyle', attr: 'data-life', label: '生命' },
+  deal: { key: 'dealStyle', attr: 'data-deal', label: '开局' },
+  reveal: { key: 'revealStyle', attr: 'data-reveal', label: '通关' },
+  confetti: { key: 'confettiStyle', attr: 'data-confetti', label: '礼炮' }
 };
 
 /* 顺序就是面板里从上到下的顺序，也是每一类里第一项「默认」的意思。 */
-export var KINDS = ['surface', 'mark', 'piece', 'life'];
+export var KINDS = ['surface', 'mark', 'piece', 'life', 'deal', 'reveal', 'confetti'];
 
 /* ---- 插件清单 ----
  * 色块图案的几套主题排在前面（面板里是同一排），墨线那套垫底：
  * 它提供的「纯色」就是没有图案的那一档。生命单独一个插件——它不在棋盘上，
  * 跟哪套纹样都没关系。 */
-var PLUGINS = [geometry, nature, sky, sticker, classic, life];
+var PLUGINS = [geometry, nature, sky, sticker, classic, life, transitions, pokemon, originalEffects, celebration];
 
 /* ==========================================================
-   登记：把插件摊平成四张表
+   登记：把插件按类别摊平成表
    ----------------------------------------------------------
    每一项都带上 plugin / pluginName，面板据此分组、按钮上挂小标签。
    ========================================================== */
 export var PLUGIN_LIST = [];
-var LISTS = { surface: [], mark: [], piece: [], life: [] };
-var GROUPS = { surface: [], mark: [], piece: [], life: [] };
+var LISTS = {}, GROUPS = {};
+for (var kind of KINDS) { LISTS[kind] = []; GROUPS[kind] = []; }
 
 (function collect() {
   for (var p = 0; p < PLUGINS.length; p++) {
@@ -85,7 +96,9 @@ var GROUPS = { surface: [], mark: [], piece: [], life: [] };
     var info = {
       id: plug.id || 'plugin-' + (p + 1),
       name: plug.name || plug.id || '插件 ' + (p + 1),
-      note: plug.note || ''
+      note: plug.note || '',
+      stylesheet: plug.stylesheet || '',
+      mount: plug.mount, onBoard: plug.onBoard, onWin: plug.onWin
     };
     PLUGIN_LIST.push(info);
 
@@ -126,6 +139,7 @@ export function findOf(kind, id) {
 
 /** 认一个样式 id：认不出来（老存档 / 手改过 / 插件被删了）就退回这一类里的第一套。 */
 export function styleId(kind, id) {
+  if (kind === 'reveal') id = ({ kitten: 'pokemon', starlight: 'pokemon-ripple' })[id] || id;
   if (findOf(kind, id)) return id;
   var first = (LISTS[kind] || [])[0];
   return first ? first.id : '';
@@ -138,12 +152,8 @@ export function styleName(kind, id) {
 }
 
 /** 出厂的这一套：每一类的第一项。settings 的默认值就是它。 */
-export var DEFAULT_LOOK = {
-  surface: ((LISTS.surface || [])[0] || {}).id || '',
-  mark: ((LISTS.mark || [])[0] || {}).id || '',
-  piece: ((LISTS.piece || [])[0] || {}).id || '',
-  life: ((LISTS.life || [])[0] || {}).id || ''
-};
+export var DEFAULT_LOOK = {};
+for (var kind of KINDS) DEFAULT_LOOK[kind] = ((LISTS[kind] || [])[0] || {}).id || '';
 
 /** 皇后那一格画什么。认不出来就画第一套，不至于让格子空着。 */
 export function pieceSvg(id) {

@@ -1,7 +1,7 @@
 /* ============================================================================
  * panels/look.js · 外观面板
  * ----------------------------------------------------------------------------
- * 四排「展柜」：色块的花样、叉、皇后、生命（挑战「标错惩罚」的命数）长什么样。
+ * 按类别生成「展柜」：色块、棋子、生命，以及开局 / 通关 / 礼炮。
  * 选项不写在这个文件里：按钮是按 looks/index.js 登记的外观插件现场生成的，
  * 一排里跨了好几个插件时，每个展位左上角会挂一个插件名的小标签。
  *
@@ -22,6 +22,7 @@ import { announce } from '../../core/utils.js';
 import { applyPieceStyle } from '../../game/board.js';
 import { applySurface, surfaceInk } from '../../game/skin.js';
 import { DEFAULT_LOOK, KIND, KINDS, groupsOf, styleId, styleName } from '../../looks/index.js';
+import { applyEffectLooks } from '../../looks/effects.js';
 
 export var HTML = /* html */ `
 <div class="sheet-wrap" id="lookWrap" hidden>
@@ -35,7 +36,7 @@ export var HTML = /* html */ `
         </svg>
       </button>
     </div>
-    <p class="sheet-note">色块的纹样、叉、皇后和命数各挑一样。选完立刻生效，自动打的标记也一起换。</p>
+    <p class="sheet-note">棋盘、棋子和动画各挑一样。选完立刻生效，局面和成绩都不变。</p>
 
     <!-- 三排展柜：选项按钮由 src/js/looks/ 里登记的外观插件现场生成。
          一排里跨了多个插件时，展位左上角会挂一个插件名的小标签。 -->
@@ -61,6 +62,7 @@ export var HTML = /* html */ `
       <div class="case-row" id="lifeRow" role="radiogroup" aria-label="生命的样式"></div>
     </div>
 
+    <div id="effectCases"></div>
     <button class="btn sheet-done" id="btnLookDone" type="button">知道了</button>
   </div>
 </div>`;
@@ -182,6 +184,8 @@ export function applyLook() {
   root.setAttribute('data-mark', settings.markStyle);
   root.setAttribute('data-piece', settings.pieceStyle);
   root.setAttribute('data-life', settings.lifeStyle);
+  for (var kind of KINDS) root.setAttribute(KIND[kind].attr, settings[KIND[kind].key]);
+  applyEffectLooks();
   applySurface();   // 顺带写 data-surface、建 defs、给每格上墨色
   // 只在真的换了样式时重画格子里的画：新棋盘本来是照当前样式建的，不用再刷一遍
   if (view.lookPiece !== settings.pieceStyle) applyPieceStyle();
@@ -256,6 +260,15 @@ export function mount(host) {
     piece: { row: pieceRow, now: pieceNow },
     life: { row: lifeRow, now: lifeNow }
   };
+  // 新的外观类别沿用作者的展柜结构，选项仍全部来自 looks/ 的插件登记。
+  var effectCases = document.getElementById('effectCases');
+  for (var kind of KINDS) {
+    if (ROW_ELS[kind]) continue;
+    effectCases.insertAdjacentHTML('beforeend', '<div class="case">' +
+      '<div class="case-head"><b>' + KIND[kind].label + '</b><span id="' + kind + 'Now"></span></div>' +
+      '<div class="case-row" id="' + kind + 'Row" role="radiogroup" aria-label="' + KIND[kind].label + '的样式"></div></div>');
+    ROW_ELS[kind] = { row: document.getElementById(kind + 'Row'), now: document.getElementById(kind + 'Now') };
+  }
   for (var kk = 0; kk < KINDS.length; kk++) buildCase(KINDS[kk]);
 
   /* 跟设置 / 本局信息 / 战绩同一套：inert、canPlay、Esc、Tab 都在 core/sheet.js 里。
@@ -277,10 +290,6 @@ export function mount(host) {
   lookSheet.addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('.showcase') : null;
     if (!b) return;
-    // 四排的按钮都叫 .showcase，靠 data-surface / data-mark / data-piece / data-life 分派
-    if (b.dataset.surface) pickLook('surface', b.dataset.surface);
-    else if (b.dataset.mark) pickLook('mark', b.dataset.mark);
-    else if (b.dataset.piece) pickLook('piece', b.dataset.piece);
-    else if (b.dataset.life) pickLook('life', b.dataset.life);
+    for (var kind of KINDS) if (b.dataset[kind]) { pickLook(kind, b.dataset[kind]); break; }
   });
 }

@@ -1,0 +1,110 @@
+[
+  {
+    "id": 1,
+    "file": "1.png",
+    "sha256": "7233d8d8b03b5fa91d835a3069d25769155db93c9ef91b6066e215ed3895e9d8",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png"
+  },
+  {
+    "id": 4,
+    "file": "4.png",
+    "sha256": "0c8e36e321cbd6578d0b669324edf6cb819f8e510dbac43cee22c4221db80b4d",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/4.png"
+  },
+  {
+    "id": 6,
+    "file": "6.png",
+    "sha256": "b6d5b8ee9fb05dc6f53294b2cae660dec770b92762cdb19d16bcbd679e1ba43a",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png"
+  },
+  {
+    "id": 7,
+    "file": "7.png",
+    "sha256": "37cda7bf8ad6f4252d539aed3bd989a85c8cb0f8e9d815be12bad08c16f31fe9",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/7.png"
+  },
+  {
+    "id": 25,
+    "file": "25.png",
+    "sha256": "759ceafdb4b8d637dfcfe673cf672bc3c472354a3b2e7e0835d9cdcacd8d195d",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png"
+  },
+  {
+    "id": 39,
+    "file": "39.png",
+    "sha256": "2d8fa64258727708417495b5ca4d28a148628d962709f58235b9e0837eb41365",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/39.png"
+  },
+  {
+    "id": 54,
+    "file": "54.png",
+    "sha256": "87110a75d9d9c67e0d82b912abcea3c25a96bc394e366812c65639ea1bacdf40",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/54.png"
+  },
+  {
+    "id": 94,
+    "file": "94.png",
+    "sha256": "b6549b80537676fcf4a589c8853b38cce42f42b5f707bbe2e63797666175cf06",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png"
+  },
+  {
+    "id": 132,
+    "file": "132.png",
+    "sha256": "5f7be2f22d06658a52b4e863a22e37d8904e539d9d8e23f15d4ea869b095e21f",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/132.png"
+  },
+  {
+    "id": 133,
+    "file": "133.png",
+    "sha256": "33ea993d3478ee920062b0bf27792a045b3a2f75d941bdb8cb3912ef50b1fb44",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png"
+  },
+  {
+    "id": 143,
+    "file": "143.png",
+    "sha256": "1afd32e5f6053a50860d67c5d7cc3bc6ca9a174634097fe65880523a0a13a55a",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/143.png"
+  },
+  {
+    "id": 149,
+    "file": "149.png",
+    "sha256": "4bd7549caa15eac43a8197ba53e843a95f2b56c71b1121829ea76764fbf26f9c",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/149.png"
+  },
+  {
+    "id": 150,
+    "file": "150.png",
+    "sha256": "d99adeb9b4523073ca218a6f472ea5b602b047ccd8af8dea6fa7ae051f80366a",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png"
+  },
+  {
+    "id": 151,
+    "file": "151.png",
+    "sha256": "9991aee5181178b604b99aec636533b0c5a52a321ce246dd3b9c33243a342a64",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/151.png"
+  },
+  {
+    "id": 196,
+    "file": "196.png",
+    "sha256": "d0e74b02adc3df07f9bf026303b1068c58183f8703ae2ca42b8d7b58e9a0696f",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/196.png"
+  },
+  {
+    "id": 197,
+    "file": "197.png",
+    "sha256": "8d7f18f7b323269dff84480f1ee8873a5d47a3eb3fd4b2ac1d2bbf0cf45a6ddd",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/197.png"
+  },
+  {
+    "id": 448,
+    "file": "448.png",
+    "sha256": "8c5064f1d4a37c8b554d7ad83d77970b02d6875750f934c782493c83f8943127",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/448.png"
+  },
+  {
+    "id": 658,
+    "file": "658.png",
+    "sha256": "e88f4590ff53a8f8965c9e1be19a0f069c51c4dc7ca64ecb25ac96c64c8504d3",
+    "source": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/658.png"
+  }
+]

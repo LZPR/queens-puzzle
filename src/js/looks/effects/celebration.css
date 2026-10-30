@@ -1,0 +1,63 @@
+.look-celebration { position: fixed; inset: 0; pointer-events: none; }
+.look-particle {
+  position: absolute; display: block; width: 10px; height: 10px;
+  background: var(--particle-color);
+  animation: lookFirework 1.3s ease-out var(--particle-delay) both;
+}
+.look-celebration[data-kind="fireworks"] .look-particle {
+  width: var(--star-size); height: var(--star-size); background: none;
+  filter: drop-shadow(0 1px 1px #874420) drop-shadow(0 0 4px #fff6d5);
+  animation: lookStarBurst 1.8s cubic-bezier(.12, .65, .25, 1) var(--particle-delay) both;
+}
+.look-celebration[data-kind="fireworks"] .look-particle::before,
+.look-celebration[data-kind="fireworks"] .look-particle::after {
+  content: ''; position: absolute; inset: 0; background: #fff;
+  clip-path: polygon(50% 0, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0 50%, 37% 37%);
+}
+.look-celebration[data-kind="fireworks"] .look-particle::after {
+  inset: 2px; background: var(--particle-color);
+}
+.look-burst {
+  position: absolute; width: calc(var(--star-size) * 1.8); height: calc(var(--star-size) * 1.8);
+  transform: translate(-50%, -50%); filter: drop-shadow(0 0 4px #fff);
+}
+.look-burst::before {
+  content: ''; position: absolute; inset: -100%; border: 3px solid var(--particle-color); border-radius: 50%;
+  animation: lookBurstRing 1.2s ease-out var(--particle-delay) both;
+}
+.look-burst::after {
+  content: ''; position: absolute; inset: 0; background: var(--particle-color);
+  clip-path: polygon(50% 0, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0 50%, 37% 37%);
+  animation: lookBurstFlash .9s ease-out var(--particle-delay) both;
+}
+.look-celebration[data-kind="hearts"] .look-particle {
+  width: 12px; height: 12px;
+  clip-path: polygon(50% 20%, 66% 4%, 89% 8%, 100% 30%, 94% 50%, 50% 96%, 6% 50%, 0 30%, 11% 8%, 34% 4%);
+  animation-name: lookHeartRise; animation-duration: 1.5s;
+}
+@keyframes lookFirework {
+  0% { opacity: 0; transform: translate(0, 0) scale(.3); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--particle-x), var(--particle-y)) scale(.3) rotate(100deg); }
+}
+@keyframes lookStarBurst {
+  0% { opacity: 0; transform: translate(0, 0) scale(.2) rotate(-25deg); }
+  12% { opacity: 1; transform: translate(calc(var(--particle-x) * .25), calc(var(--particle-y) * .25)) scale(1.2); }
+  65% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--particle-x), var(--particle-y)) scale(.65) rotate(100deg); }
+}
+@keyframes lookBurstRing {
+  0% { opacity: 0; transform: scale(.15); }
+  15% { opacity: .85; }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+@keyframes lookBurstFlash {
+  0% { opacity: 0; transform: scale(.2) rotate(-15deg); }
+  20%, 50% { opacity: 1; transform: scale(1.15) rotate(15deg); }
+  100% { opacity: 0; transform: scale(.6) rotate(40deg); }
+}
+@keyframes lookHeartRise {
+  0% { opacity: 0; transform: translate(0, 0) scale(.4) rotate(-15deg); }
+  18% { opacity: .85; }
+  100% { opacity: 0; transform: translate(var(--particle-x), var(--particle-y)) scale(1) rotate(20deg); }
+}
